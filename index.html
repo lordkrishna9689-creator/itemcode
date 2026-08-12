@@ -4,11 +4,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Fast & Sorted PDF Item Code Extractor</title>
-
-    <!-- PDF.js Library for reading PDFs -->
+    <title>PDF & System Item Code Comparator</title>
+    <!-- PDF.js Library (JavaScript) for reading PDFs in browser -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <!-- SheetJS (XLSX) Library for exporting to Excel -->
+    <!-- SheetJS (JavaScript) Library for parsing & exporting Excel in browser -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
     <style>
@@ -19,7 +18,7 @@
             color: #333;
         }
         .container {
-            max-width: 650px;
+            max-width: 1000px;
             margin: 0 auto;
             background: #ffffff;
             padding: 25px;
@@ -30,39 +29,104 @@
             margin-top: 0;
             color: #2c3e50;
         }
+        .grid-uploads {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
         .upload-section {
             border: 2px dashed #3498db;
-            padding: 30px;
+            padding: 20px;
             text-align: center;
             border-radius: 6px;
             background: #ebf5fb;
-            margin-bottom: 20px;
             transition: background 0.3s;
             cursor: pointer;
         }
         .upload-section.dragover {
             background-color: #d4e6f1;
         }
+        .upload-section.excel-section {
+            border-color: #27ae60;
+            background: #eafaf1;
+        }
+        .upload-section.excel-section.dragover {
+            background-color: #d5f5e3;
+        }
         input[type="file"] {
             display: none;
         }
         .custom-file-upload {
             display: inline-block;
-            padding: 10px 20px;
+            padding: 10px 16px;
             cursor: pointer;
             background-color: #3498db;
             color: white;
             border-radius: 4px;
             font-weight: bold;
             transition: background 0.3s;
+            font-size: 13px;
         }
         .custom-file-upload:hover {
             background-color: #2980b9;
         }
-        .actions {
+        .custom-file-upload.excel-btn {
+            background-color: #27ae60;
+        }
+        .custom-file-upload.excel-btn:hover {
+            background-color: #1e8449;
+        }
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 10px;
             margin-bottom: 20px;
         }
-        button {
+        .card {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            padding: 12px;
+            text-align: center;
+        }
+        .card-num {
+            font-size: 20px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        .card-label {
+            font-size: 12px;
+            color: #6c757d;
+            margin-top: 4px;
+        }
+        .filter-bar {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        .filter-btn {
+            padding: 6px 14px;
+            background: #e0e0e0;
+            color: #333;
+            border: none;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .filter-btn.active {
+            background: #3498db;
+            color: #fff;
+        }
+        .actions {
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        button.action-btn {
             padding: 10px 18px;
             background-color: #2ecc71;
             color: white;
@@ -73,10 +137,10 @@
             cursor: pointer;
             transition: background 0.3s;
         }
-        button:hover {
+        button.action-btn:hover {
             background-color: #27ae60;
         }
-        button:disabled {
+        button.action-btn:disabled {
             background-color: #bdc3c7;
             cursor: not-allowed;
         }
@@ -101,8 +165,9 @@
         }
         th, td {
             border: 1px solid #ddd;
-            padding: 10px;
+            padding: 9px;
             text-align: left;
+            font-size: 13px;
         }
         th {
             background-color: #f2f2f2;
@@ -111,60 +176,110 @@
         tr:nth-child(even) {
             background-color: #f9f9f9;
         }
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+            color: white;
+        }
+        .badge-duplicate { background-color: #e67e22; }
+        .badge-notfound { background-color: #e74c3c; }
+        .badge-missing-excel { background-color: #9b59b6; }
+        .badge-missing-pdf { background-color: #34495e; }
+        .badge-match { background-color: #2ecc71; }
     </style>
 </head>
 <body>
 
 <div class="container">
-    <h2>PDF Item Code Extractor</h2>
-    <p>Drag & drop folders below to extract Item Codes sorted from <b>Small to Large</b>.</p>
+    <h2>PDF & System Item Code Comparator</h2>
+    <p>Upload your PDFs/folders and raw System Excel sheet. Automatically extracts <b>Item Code, Item Name, & Item Type</b> from PDFs and filters Excel by <b>ASSEMBLY / SUB ASSEMBLY</b>.</p>
 
-    <div class="upload-section" id="drop-zone">
-        <label for="pdf-input" class="custom-file-upload">
-            Select PDF Files / Folders
-        </label>
-        <input type="file" id="pdf-input" multiple webkitdirectory accept="application/pdf">
-        <p id="file-count" style="margin-top: 15px; color: #555;">Drag and drop folders or click above</p>
+    <div class="grid-uploads">
+        <!-- PDF Upload Zone -->
+        <div class="upload-section" id="pdf-drop-zone">
+            <label for="pdf-input" class="custom-file-upload">
+                1. Select / Drop PDFs or Folders
+            </label>
+            <input type="file" id="pdf-input" multiple webkitdirectory accept="application/pdf">
+            <p id="pdf-file-count" style="margin-top: 10px; font-size: 12px; color: #555;">No PDFs loaded</p>
+        </div>
+
+        <!-- Excel Upload Zone -->
+        <div class="upload-section excel-section" id="excel-drop-zone">
+            <label for="excel-input" class="custom-file-upload excel-btn">
+                2. Upload System Raw Excel Sheet
+            </label>
+            <input type="file" id="excel-input" accept=".xlsx, .xls, .csv">
+            <p id="excel-file-count" style="margin-top: 10px; font-size: 12px; color: #555;">No Excel loaded</p>
+        </div>
     </div>
 
     <div class="progress-bar-container" id="progress-container">
         <div class="progress-bar" id="progress-bar"></div>
     </div>
 
+    <!-- Summary Cards -->
+    <div class="summary-cards">
+        <div class="card"><div class="card-num" id="cnt-pdf-total">0</div><div class="card-label">PDFs Processed</div></div>
+        <div class="card"><div class="card-num" id="cnt-excel-total">0</div><div class="card-label">System Excel Codes</div></div>
+        <div class="card"><div class="card-num" id="cnt-duplicates" style="color:#e67e22;">0</div><div class="card-label">Duplicates Found</div></div>
+        <div class="card"><div class="card-num" id="cnt-notfound" style="color:#e74c3c;">0</div><div class="card-label">Not Found in PDF</div></div>
+        <div class="card"><div class="card-num" id="cnt-missing-excel" style="color:#9b59b6;">0</div><div class="card-label">Missing in Excel</div></div>
+        <div class="card"><div class="card-num" id="cnt-missing-pdf" style="color:#34495e;">0</div><div class="card-label">Missing in PDF</div></div>
+    </div>
+
+    <div class="filter-bar">
+        <button class="filter-btn active" onclick="setFilter('ALL', this)">All Results</button>
+        <button class="filter-btn" onclick="setFilter('DUPLICATE', this)">Duplicates</button>
+        <button class="filter-btn" onclick="setFilter('NOT_FOUND', this)">Not Found in PDF</button>
+        <button class="filter-btn" onclick="setFilter('MISSING_IN_EXCEL', this)">Missing in Excel</button>
+        <button class="filter-btn" onclick="setFilter('MISSING_IN_PDF', this)">Missing in PDF</button>
+    </div>
+
     <div class="actions">
-        <button id="export-btn" onclick="exportToExcel()" disabled>Export to Excel</button>
+        <span id="status-msg" style="font-size: 13px; color: #555;">Upload PDFs and System Excel sheet to analyze.</span>
+        <button id="export-btn" class="action-btn" onclick="exportToExcel()" disabled>Export Comparison Report</button>
     </div>
 
     <table id="result-table">
         <thead>
             <tr>
-                <th>File Name</th>
+                <th>Source / File Name</th>
                 <th>Item Code</th>
+                <th>Item Name</th>
+                <th>Item Type</th>
+                <th>Status / Findings</th>
             </tr>
         </thead>
         <tbody id="table-body">
             <tr>
-                <td colspan="2" style="text-align: center; color: #888;">Drag and drop folders to process PDFs.</td>
+                <td colspan="5" style="text-align: center; color: #888;">Upload files above to run extraction and matching.</td>
             </tr>
         </tbody>
     </table>
 </div>
 
 <script>
-    // Set PDF worker URL
+    // Initialize PDF.js worker
     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
 
-    let extractedData = [];
-    const dropZone = document.getElementById('drop-zone');
+    let pdfExtractedData = [];
+    let systemExcelCodes = [];
+    let finalComparisonData = [];
+    let currentFilter = 'ALL';
 
-    // Drag-and-drop events
-    dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('dragover'); });
-    dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+    const pdfDropZone = document.getElementById('pdf-drop-zone');
+    const excelDropZone = document.getElementById('excel-drop-zone');
 
-    dropZone.addEventListener('drop', async (e) => {
+    // Drag-and-drop event listeners for PDFs
+    pdfDropZone.addEventListener('dragover', (e) => { e.preventDefault(); pdfDropZone.classList.add('dragover'); });
+    pdfDropZone.addEventListener('dragleave', () => pdfDropZone.classList.remove('dragover'));
+    pdfDropZone.addEventListener('drop', async (e) => {
         e.preventDefault();
-        dropZone.classList.remove('dragover');
-
+        pdfDropZone.classList.remove('dragover');
         const items = e.dataTransfer.items;
         if (!items) return;
 
@@ -173,16 +288,27 @@
             const entry = items[i].webkitGetAsEntry ? items[i].webkitGetAsEntry() : null;
             if (entry) await scanFiles(entry, pdfFiles);
         }
-
-        if (pdfFiles.length > 0) processPDFFilesSuperFast(pdfFiles);
+        if (pdfFiles.length > 0) processPDFFiles(pdfFiles);
     });
 
     document.getElementById('pdf-input').addEventListener('change', function(e) {
         const files = Array.from(e.target.files).filter(f => f.name.toLowerCase().endsWith('.pdf'));
-        if (files.length > 0) processPDFFilesSuperFast(files);
+        if (files.length > 0) processPDFFiles(files);
     });
 
-    // Recursively traverse dropped folders
+    // Drag-and-drop event listeners for Excel
+    excelDropZone.addEventListener('dragover', (e) => { e.preventDefault(); excelDropZone.classList.add('dragover'); });
+    excelDropZone.addEventListener('dragleave', () => excelDropZone.classList.remove('dragover'));
+    excelDropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        excelDropZone.classList.remove('dragover');
+        if (e.dataTransfer.files.length > 0) processExcelFile(e.dataTransfer.files[0]);
+    });
+
+    document.getElementById('excel-input').addEventListener('change', function(e) {
+        if (e.target.files.length > 0) processExcelFile(e.target.files[0]);
+    });
+
     async function scanFiles(entry, pdfFiles) {
         if (entry.isFile) {
             if (entry.name.toLowerCase().endsWith('.pdf')) {
@@ -197,55 +323,35 @@
         }
     }
 
-    // Processing PDFs in high-speed parallel batches
-    async function processPDFFilesSuperFast(files) {
+    async function processPDFFiles(files) {
         const startTime = performance.now();
         const progressContainer = document.getElementById('progress-container');
         const progressBar = document.getElementById('progress-bar');
-        const fileCountText = document.getElementById('file-count');
-        const tableBody = document.getElementById('table-body');
+        const pdfFileCountText = document.getElementById('pdf-file-count');
 
         progressContainer.style.display = 'block';
         progressBar.style.width = '0%';
-        fileCountText.innerText = `Processing ${files.length} PDFs...`;
-        tableBody.innerHTML = '<tr><td colspan="2" style="text-align:center;">Extracting and sorting data... please wait.</td></tr>';
+        pdfFileCountText.innerText = `Processing ${files.length} PDFs...`;
         
-        extractedData = [];
-
-        const CHUNK_SIZE = 20; // Parallel batch size
+        pdfExtractedData = [];
+        const CHUNK_SIZE = 20;
         let completed = 0;
 
         for (let i = 0; i < files.length; i += CHUNK_SIZE) {
             const chunk = files.slice(i, i + CHUNK_SIZE);
             const chunkResults = await Promise.all(chunk.map(file => processSinglePDF(file)));
-            
-            extractedData.push(...chunkResults);
+            pdfExtractedData.push(...chunkResults);
             completed += chunk.length;
-
             const percent = Math.min(100, Math.round((completed / files.length) * 100));
             progressBar.style.width = `${percent}%`;
         }
 
-        // --- NUMERICAL SORT (SMALL TO LARGE) ---
-        extractedData.sort((a, b) => {
-            const numA = parseInt(a.itemCode, 10);
-            const numB = parseInt(b.itemCode, 10);
-
-            if (!isNaN(numA) && !isNaN(numB)) {
-                return numA - numB;
-            }
-            return a.itemCode.localeCompare(b.itemCode, undefined, { numeric: true, sensitivity: 'base' });
-        });
-
-        // Render table once sorting is done
-        renderTableRows(extractedData);
-
         const timeTaken = ((performance.now() - startTime) / 1000).toFixed(2);
-        fileCountText.innerText = `Done! Processed & sorted ${files.length} PDFs in ${timeTaken} seconds.`;
-        document.getElementById('export-btn').disabled = false;
+        pdfFileCountText.innerText = `Done! Loaded ${files.length} PDFs (${timeTaken}s)`;
+        
+        runComparison();
     }
 
-    // Extract text from page 1 of each PDF
     async function processSinglePDF(file) {
         try {
             const arrayBuffer = await file.arrayBuffer();
@@ -260,52 +366,906 @@
                 fullText += textContent.items[i].str + ' ';
             }
 
-            // Strictly extract the value immediately following "Item Code:"
-            const match = fullText.match(/Item\s*Code\s*:\s*([^\s]+)/i);
-            const itemCode = match ? match[1].trim() : 'Not Found';
+            // Match Item Code
+            const codeMatch = fullText.match(/Item\s*Code\s*:\s*([^\s]+)/i);
+            const itemCode = codeMatch ? codeMatch[1].trim() : 'Not Found';
+
+            // Match Item Name
+            const nameMatch = fullText.match(/Item\s*Name\s*:\s*(.*?)(?=\s*(?:Part\s*Code|Units|Type|Item\s*Type|Material|Gross|BOM|\n|$))/i);
+            const itemName = nameMatch ? nameMatch[1].trim() : 'Not Found';
+
+            // Match Item Type
+            const typeMatch = fullText.match(/Item\s*Type\s*:\s*(.*?)(?=\s*(?:Material|Gross|Net|Cut|Units|BOM|\n|$))/i);
+            const itemType = typeMatch ? typeMatch[1].trim() : 'Not Found';
 
             pdf.cleanup();
             pdf.destroy();
 
-            return { fileName: file.name, itemCode: itemCode };
+            return { fileName: file.name, itemCode: itemCode, itemName: itemName, itemType: itemType };
         } catch (e) {
-            return { fileName: file.name, itemCode: 'Error' };
+            return { fileName: file.name, itemCode: 'Error', itemName: 'Error', itemType: 'Error' };
         }
     }
 
-    // Render table DOM
-    function renderTableRows(data) {
-        const tableBody = document.getElementById('table-body');
-        let htmlStr = '';
-        
-        // Render preview limit for UI performance
-        const displayData = data.slice(0, 300);
+    // Process Raw Excel Export & Filter Assembly / Sub Assembly
+    function processExcelFile(file) {
+        const excelFileCountText = document.getElementById('excel-file-count');
+        excelFileCountText.innerText = `Reading ${file.name}...`;
 
-        for (let row of displayData) {
-            htmlStr += `<tr><td>${row.fileName}</td><td><strong>${row.itemCode}</strong></td></tr>`;
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                const json = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+
+                systemExcelCodes = [];
+                if (json.length > 0) {
+                    const keys = Object.keys(json[0]);
+                    
+                    // Auto-detect Item Code column name
+                    let codeKey = keys.find(k => {
+                        const clean = k.trim().toUpperCase();
+                        return clean.includes('ITEM CODE') || clean.includes('CODE') || clean.includes('SKU');
+                    }) || keys[0];
+
+                    // Auto-detect Item Type column name
+                    let typeKey = keys.find(k => {
+                        const clean = k.trim().toUpperCase();
+                        return clean.includes('ITEM TYPE') || clean.includes('TYPE');
+                    });
+
+                    json.forEach(row => {
+                        let codeVal = row[codeKey];
+                        
+                        // Condition check: Item Type MUST be "ASSEMBLY" or "SUB ASSEMBLY"
+                        let isValidType = true;
+                        if (typeKey) {
+                            let typeVal = String(row[typeKey] || '').trim().toUpperCase();
+                            isValidType = (typeVal === 'ASSEMBLY' || typeVal === 'SUB ASSEMBLY' || typeVal === 'SUB-ASSEMBLY');
+                        }
+
+                        if (isValidType && codeVal !== undefined && codeVal !== null && String(codeVal).trim() !== '') {
+                            systemExcelCodes.push(String(codeVal).trim());
+                        }
+                    });
+                }
+
+                excelFileCountText.innerText = `Loaded ${systemExcelCodes.length} codes (Filtered: ASSEMBLY / SUB ASSEMBLY)`;
+                runComparison();
+            } catch (err) {
+                excelFileCountText.innerText = `Error reading Excel file!`;
+                console.error(err);
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    // Comparison logic
+    function runComparison() {
+        finalComparisonData = [];
+
+        const pdfCodeCounts = {};
+        pdfExtractedData.forEach(item => {
+            if (item.itemCode !== 'Not Found' && item.itemCode !== 'Error') {
+                pdfCodeCounts[item.itemCode] = (pdfCodeCounts[item.itemCode] || 0) + 1;
+            }
+        });
+
+        const excelCodeCounts = {};
+        systemExcelCodes.forEach(code => {
+            excelCodeCounts[code] = (excelCodeCounts[code] || 0) + 1;
+        });
+
+        const excelCodeSet = new Set(systemExcelCodes);
+        const pdfFoundCodesSet = new Set();
+
+        pdfExtractedData.forEach(pdfItem => {
+            const code = pdfItem.itemCode;
+            const name = pdfItem.itemName;
+            const type = pdfItem.itemType;
+            let statuses = [];
+
+            if (code === 'Not Found' || code === 'Error') {
+                statuses.push('NOT_FOUND');
+            } else {
+                pdfFoundCodesSet.add(code);
+                if (pdfCodeCounts[code] > 1) {
+                    statuses.push('DUPLICATE_PDF');
+                }
+                if (systemExcelCodes.length > 0 && !excelCodeSet.has(code)) {
+                    statuses.push('MISSING_IN_EXCEL');
+                }
+            }
+
+            if (statuses.length === 0) statuses.push('MATCHED');
+
+            finalComparisonData.push({
+                source: pdfItem.fileName,
+                itemCode: code,
+                itemName: name,
+                itemType: type,
+                statuses: statuses
+            });
+        });
+
+        if (systemExcelCodes.length > 0) {
+            systemExcelCodes.forEach(code => {
+                let statuses = [];
+                if (excelCodeCounts[code] > 1) {
+                    statuses.push('DUPLICATE_EXCEL');
+                }
+                if (!pdfFoundCodesSet.has(code)) {
+                    statuses.push('MISSING_IN_PDF');
+                    finalComparisonData.push({
+                        source: 'System Excel Export',
+                        itemCode: code,
+                        itemName: '-',
+                        itemType: '-',
+                        statuses: statuses
+                    });
+                }
+            });
         }
 
-        if (data.length > 300) {
-            htmlStr += `<tr><td colspan="2" style="text-align:center; color:#e67e22;"><em>+ ${data.length - 300} more items hidden from preview (all will be exported to Excel).</em></td></tr>`;
+        // Numerical & alphabetical sorting
+        finalComparisonData.sort((a, b) => {
+            const numA = parseInt(a.itemCode, 10);
+            const numB = parseInt(b.itemCode, 10);
+            if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+            return a.itemCode.localeCompare(b.itemCode, undefined, { numeric: true, sensitivity: 'base' });
+        });
+
+        updateSummaryAndTable();
+    }
+
+    function updateSummaryAndTable() {
+        let pdfTotal = pdfExtractedData.length;
+        let excelTotal = systemExcelCodes.length;
+        let duplicateCount = 0;
+        let notFoundCount = 0;
+        let missingExcelCount = 0;
+        let missingPdfCount = 0;
+
+        finalComparisonData.forEach(row => {
+            if (row.statuses.includes('NOT_FOUND')) notFoundCount++;
+            if (row.statuses.includes('MISSING_IN_EXCEL')) missingExcelCount++;
+            if (row.statuses.includes('MISSING_IN_PDF')) missingPdfCount++;
+            if (row.statuses.includes('DUPLICATE_PDF') || row.statuses.includes('DUPLICATE_EXCEL')) duplicateCount++;
+        });
+
+        document.getElementById('cnt-pdf-total').innerText = pdfTotal;
+        document.getElementById('cnt-excel-total').innerText = excelTotal;
+        document.getElementById('cnt-duplicates').innerText = duplicateCount;
+        document.getElementById('cnt-notfound').innerText = notFoundCount;
+        document.getElementById('cnt-missing-excel').innerText = missingExcelCount;
+        document.getElementById('cnt-missing-pdf').innerText = missingPdfCount;
+
+        if (finalComparisonData.length > 0) {
+            document.getElementById('export-btn').disabled = false;
+            document.getElementById('status-msg').innerText = `Comparison complete.`;
+        }
+
+        renderTable();
+    }
+
+    function setFilter(filterType, btnElem) {
+        currentFilter = filterType;
+        document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+        if (btnElem) btnElem.classList.add('active');
+        renderTable();
+    }
+
+    function renderTable() {
+        const tableBody = document.getElementById('table-body');
+        
+        let filtered = finalComparisonData.filter(row => {
+            if (currentFilter === 'ALL') return true;
+            if (currentFilter === 'DUPLICATE') return row.statuses.includes('DUPLICATE_PDF') || row.statuses.includes('DUPLICATE_EXCEL');
+            if (currentFilter === 'NOT_FOUND') return row.statuses.includes('NOT_FOUND');
+            if (currentFilter === 'MISSING_IN_EXCEL') return row.statuses.includes('MISSING_IN_EXCEL');
+            if (currentFilter === 'MISSING_IN_PDF') return row.statuses.includes('MISSING_IN_PDF');
+            return true;
+        });
+
+        if (filtered.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#888;">No records match the selected filter.</td></tr>';
+            return;
+        }
+
+        const displayLimit = 300;
+        const displayData = filtered.slice(0, displayLimit);
+        let htmlStr = '';
+
+        for (let row of displayData) {
+            let badgesHtml = row.statuses.map(st => {
+                if (st === 'DUPLICATE_PDF') return '<span class="badge badge-duplicate">Duplicate in PDF</span>';
+                if (st === 'DUPLICATE_EXCEL') return '<span class="badge badge-duplicate">Duplicate in Excel</span>';
+                if (st === 'NOT_FOUND') return '<span class="badge badge-notfound">Not Found in PDF</span>';
+                if (st === 'MISSING_IN_EXCEL') return '<span class="badge badge-missing-excel">Missing in System Excel</span>';
+                if (st === 'MISSING_IN_PDF') return '<span class="badge badge-missing-pdf">Missing in PDF</span>';
+                if (st === 'MATCHED') return '<span class="badge badge-match">Matched</span>';
+                return '';
+            }).join(' ');
+
+            htmlStr += `<tr>
+                <td>${row.source}</td>
+                <td><strong>${row.itemCode}</strong></td>
+                <td>${row.itemName || '-'}</td>
+                <td>${row.itemType || '-'}</td>
+                <td>${badgesHtml}</td>
+            </tr>`;
+        }
+
+        if (filtered.length > displayLimit) {
+            htmlStr += `<tr><td colspan="5" style="text-align:center; color:#e67e22;"><em>+ ${filtered.length - displayLimit} more rows hidden from preview (all will be exported to Excel).</em></td></tr>`;
         }
 
         tableBody.innerHTML = htmlStr;
     }
 
-    // Export sorted results to XLSX
     function exportToExcel() {
-        if (!extractedData.length) return;
+        if (!finalComparisonData.length) return;
 
-        const excelData = extractedData.map(item => ({
-            "File Name": item.fileName,
-            "Item Code": item.itemCode
+        const excelRows = finalComparisonData.map(item => ({
+            "Source / File Name": item.source,
+            "Item Code": item.itemCode,
+            "Item Name": item.itemName || '-',
+            "Item Type": item.itemType || '-',
+            "Findings / Status": item.statuses.map(st => {
+                if (st === 'DUPLICATE_PDF') return 'Duplicate in PDF';
+                if (st === 'DUPLICATE_EXCEL') return 'Duplicate in System Excel';
+                if (st === 'NOT_FOUND') return 'Not Found in PDF';
+                if (st === 'MISSING_IN_EXCEL') return 'Missing in System Excel';
+                if (st === 'MISSING_IN_PDF') return 'Missing in PDF';
+                if (st === 'MATCHED') return 'Matched';
+                return st;
+            }).join(' | ')
         }));
 
-        const worksheet = XLSX.utils.json_to_sheet(excelData);
+        const worksheet = XLSX.utils.json_to_sheet(excelRows);
         const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Item Codes");
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Item Code Discrepancies");
 
-        XLSX.writeFile(workbook, "Sorted_Item_Codes.xlsx");
+        XLSX.writeFile(workbook, "Item_Code_Comparison_Report.xlsx");
+    }
+</script>
+
+</body>
+</html>
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF & System Item Code Comparator</title>
+    <!-- PDF.js Library (JavaScript) for reading PDFs in browser -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <!-- SheetJS (JavaScript) Library for parsing & exporting Excel in browser -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 30px;
+            background-color: #f4f6f9;
+            color: #333;
+        }
+        .container {
+            max-width: 1000px;
+            margin: 0 auto;
+            background: #ffffff;
+            padding: 25px;
+            border-radius: 8px;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+        }
+        h2 {
+            margin-top: 0;
+            color: #2c3e50;
+        }
+        .grid-uploads {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 15px;
+            margin-bottom: 20px;
+        }
+        .upload-section {
+            border: 2px dashed #3498db;
+            padding: 20px;
+            text-align: center;
+            border-radius: 6px;
+            background: #ebf5fb;
+            transition: background 0.3s;
+            cursor: pointer;
+        }
+        .upload-section.dragover {
+            background-color: #d4e6f1;
+        }
+        .upload-section.excel-section {
+            border-color: #27ae60;
+            background: #eafaf1;
+        }
+        .upload-section.excel-section.dragover {
+            background-color: #d5f5e3;
+        }
+        input[type="file"] {
+            display: none;
+        }
+        .custom-file-upload {
+            display: inline-block;
+            padding: 10px 16px;
+            cursor: pointer;
+            background-color: #3498db;
+            color: white;
+            border-radius: 4px;
+            font-weight: bold;
+            transition: background 0.3s;
+            font-size: 13px;
+        }
+        .custom-file-upload:hover {
+            background-color: #2980b9;
+        }
+        .custom-file-upload.excel-btn {
+            background-color: #27ae60;
+        }
+        .custom-file-upload.excel-btn:hover {
+            background-color: #1e8449;
+        }
+        .summary-cards {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+        .card {
+            background: #f8f9fa;
+            border: 1px solid #e9ecef;
+            border-radius: 6px;
+            padding: 12px;
+            text-align: center;
+        }
+        .card-num {
+            font-size: 20px;
+            font-weight: bold;
+            color: #2c3e50;
+        }
+        .card-label {
+            font-size: 12px;
+            color: #6c757d;
+            margin-top: 4px;
+        }
+        .filter-bar {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 15px;
+            flex-wrap: wrap;
+        }
+        .filter-btn {
+            padding: 6px 14px;
+            background: #e0e0e0;
+            color: #333;
+            border: none;
+            border-radius: 20px;
+            font-size: 13px;
+            font-weight: bold;
+            cursor: pointer;
+        }
+        .filter-btn.active {
+            background: #3498db;
+            color: #fff;
+        }
+        .actions {
+            margin-bottom: 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        button.action-btn {
+            padding: 10px 18px;
+            background-color: #2ecc71;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            font-size: 14px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        button.action-btn:hover {
+            background-color: #27ae60;
+        }
+        button.action-btn:disabled {
+            background-color: #bdc3c7;
+            cursor: not-allowed;
+        }
+        .progress-bar-container {
+            width: 100%;
+            background-color: #e0e0e0;
+            border-radius: 4px;
+            margin-bottom: 15px;
+            display: none;
+        }
+        .progress-bar {
+            width: 0%;
+            height: 12px;
+            background-color: #2ecc71;
+            border-radius: 4px;
+            transition: width 0.1s;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 9px;
+            text-align: left;
+            font-size: 13px;
+        }
+        th {
+            background-color: #f2f2f2;
+            color: #2c3e50;
+        }
+        tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .badge {
+            display: inline-block;
+            padding: 3px 8px;
+            border-radius: 12px;
+            font-size: 11px;
+            font-weight: bold;
+            color: white;
+        }
+        .badge-duplicate { background-color: #e67e22; }
+        .badge-notfound { background-color: #e74c3c; }
+        .badge-missing-excel { background-color: #9b59b6; }
+        .badge-missing-pdf { background-color: #34495e; }
+        .badge-match { background-color: #2ecc71; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>PDF & System Item Code Comparator</h2>
+    <p>Upload your PDFs/folders and raw System Excel sheet. Automatically extracts <b>Item Code, Item Name, & Item Type</b> from PDFs and filters Excel by <b>ASSEMBLY / SUB ASSEMBLY</b>.</p>
+
+    <div class="grid-uploads">
+        <!-- PDF Upload Zone -->
+        <div class="upload-section" id="pdf-drop-zone">
+            <label for="pdf-input" class="custom-file-upload">
+                1. Select / Drop PDFs or Folders
+            </label>
+            <input type="file" id="pdf-input" multiple webkitdirectory accept="application/pdf">
+            <p id="pdf-file-count" style="margin-top: 10px; font-size: 12px; color: #555;">No PDFs loaded</p>
+        </div>
+
+        <!-- Excel Upload Zone -->
+        <div class="upload-section excel-section" id="excel-drop-zone">
+            <label for="excel-input" class="custom-file-upload excel-btn">
+                2. Upload System Raw Excel Sheet
+            </label>
+            <input type="file" id="excel-input" accept=".xlsx, .xls, .csv">
+            <p id="excel-file-count" style="margin-top: 10px; font-size: 12px; color: #555;">No Excel loaded</p>
+        </div>
+    </div>
+
+    <div class="progress-bar-container" id="progress-container">
+        <div class="progress-bar" id="progress-bar"></div>
+    </div>
+
+    <!-- Summary Cards -->
+    <div class="summary-cards">
+        <div class="card"><div class="card-num" id="cnt-pdf-total">0</div><div class="card-label">PDFs Processed</div></div>
+        <div class="card"><div class="card-num" id="cnt-excel-total">0</div><div class="card-label">System Excel Codes</div></div>
+        <div class="card"><div class="card-num" id="cnt-duplicates" style="color:#e67e22;">0</div><div class="card-label">Duplicates Found</div></div>
+        <div class="card"><div class="card-num" id="cnt-notfound" style="color:#e74c3c;">0</div><div class="card-label">Not Found in PDF</div></div>
+        <div class="card"><div class="card-num" id="cnt-missing-excel" style="color:#9b59b6;">0</div><div class="card-label">Missing in Excel</div></div>
+        <div class="card"><div class="card-num" id="cnt-missing-pdf" style="color:#34495e;">0</div><div class="card-label">Missing in PDF</div></div>
+    </div>
+
+    <div class="filter-bar">
+        <button class="filter-btn active" onclick="setFilter('ALL', this)">All Results</button>
+        <button class="filter-btn" onclick="setFilter('DUPLICATE', this)">Duplicates</button>
+        <button class="filter-btn" onclick="setFilter('NOT_FOUND', this)">Not Found in PDF</button>
+        <button class="filter-btn" onclick="setFilter('MISSING_IN_EXCEL', this)">Missing in Excel</button>
+        <button class="filter-btn" onclick="setFilter('MISSING_IN_PDF', this)">Missing in PDF</button>
+    </div>
+
+    <div class="actions">
+        <span id="status-msg" style="font-size: 13px; color: #555;">Upload PDFs and System Excel sheet to analyze.</span>
+        <button id="export-btn" class="action-btn" onclick="exportToExcel()" disabled>Export Comparison Report</button>
+    </div>
+
+    <table id="result-table">
+        <thead>
+            <tr>
+                <th>Source / File Name</th>
+                <th>Item Code</th>
+                <th>Item Name</th>
+                <th>Item Type</th>
+                <th>Status / Findings</th>
+            </tr>
+        </thead>
+        <tbody id="table-body">
+            <tr>
+                <td colspan="5" style="text-align: center; color: #888;">Upload files above to run extraction and matching.</td>
+            </tr>
+        </tbody>
+    </table>
+</div>
+
+<script>
+    // Initialize PDF.js worker
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+
+    let pdfExtractedData = [];
+    let systemExcelCodes = [];
+    let finalComparisonData = [];
+    let currentFilter = 'ALL';
+
+    const pdfDropZone = document.getElementById('pdf-drop-zone');
+    const excelDropZone = document.getElementById('excel-drop-zone');
+
+    // Drag-and-drop event listeners for PDFs
+    pdfDropZone.addEventListener('dragover', (e) => { e.preventDefault(); pdfDropZone.classList.add('dragover'); });
+    pdfDropZone.addEventListener('dragleave', () => pdfDropZone.classList.remove('dragover'));
+    pdfDropZone.addEventListener('drop', async (e) => {
+        e.preventDefault();
+        pdfDropZone.classList.remove('dragover');
+        const items = e.dataTransfer.items;
+        if (!items) return;
+
+        let pdfFiles = [];
+        for (let i = 0; i < items.length; i++) {
+            const entry = items[i].webkitGetAsEntry ? items[i].webkitGetAsEntry() : null;
+            if (entry) await scanFiles(entry, pdfFiles);
+        }
+        if (pdfFiles.length > 0) processPDFFiles(pdfFiles);
+    });
+
+    document.getElementById('pdf-input').addEventListener('change', function(e) {
+        const files = Array.from(e.target.files).filter(f => f.name.toLowerCase().endsWith('.pdf'));
+        if (files.length > 0) processPDFFiles(files);
+    });
+
+    // Drag-and-drop event listeners for Excel
+    excelDropZone.addEventListener('dragover', (e) => { e.preventDefault(); excelDropZone.classList.add('dragover'); });
+    excelDropZone.addEventListener('dragleave', () => excelDropZone.classList.remove('dragover'));
+    excelDropZone.addEventListener('drop', (e) => {
+        e.preventDefault();
+        excelDropZone.classList.remove('dragover');
+        if (e.dataTransfer.files.length > 0) processExcelFile(e.dataTransfer.files[0]);
+    });
+
+    document.getElementById('excel-input').addEventListener('change', function(e) {
+        if (e.target.files.length > 0) processExcelFile(e.target.files[0]);
+    });
+
+    async function scanFiles(entry, pdfFiles) {
+        if (entry.isFile) {
+            if (entry.name.toLowerCase().endsWith('.pdf')) {
+                pdfFiles.push(await new Promise((r) => entry.file(r)));
+            }
+        } else if (entry.isDirectory) {
+            const dirReader = entry.createReader();
+            const entries = await new Promise((r) => dirReader.readEntries(r));
+            for (let child of entries) {
+                await scanFiles(child, pdfFiles);
+            }
+        }
+    }
+
+    async function processPDFFiles(files) {
+        const startTime = performance.now();
+        const progressContainer = document.getElementById('progress-container');
+        const progressBar = document.getElementById('progress-bar');
+        const pdfFileCountText = document.getElementById('pdf-file-count');
+
+        progressContainer.style.display = 'block';
+        progressBar.style.width = '0%';
+        pdfFileCountText.innerText = `Processing ${files.length} PDFs...`;
+        
+        pdfExtractedData = [];
+        const CHUNK_SIZE = 20;
+        let completed = 0;
+
+        for (let i = 0; i < files.length; i += CHUNK_SIZE) {
+            const chunk = files.slice(i, i + CHUNK_SIZE);
+            const chunkResults = await Promise.all(chunk.map(file => processSinglePDF(file)));
+            pdfExtractedData.push(...chunkResults);
+            completed += chunk.length;
+            const percent = Math.min(100, Math.round((completed / files.length) * 100));
+            progressBar.style.width = `${percent}%`;
+        }
+
+        const timeTaken = ((performance.now() - startTime) / 1000).toFixed(2);
+        pdfFileCountText.innerText = `Done! Loaded ${files.length} PDFs (${timeTaken}s)`;
+        
+        runComparison();
+    }
+
+    async function processSinglePDF(file) {
+        try {
+            const arrayBuffer = await file.arrayBuffer();
+            const pdfTask = pdfjsLib.getDocument({ data: arrayBuffer, stopAtErrors: true });
+            const pdf = await pdfTask.promise;
+            
+            const page = await pdf.getPage(1);
+            const textContent = await page.getTextContent();
+            
+            let fullText = '';
+            for (let i = 0; i < textContent.items.length; i++) {
+                fullText += textContent.items[i].str + ' ';
+            }
+
+            // Match Item Code
+            const codeMatch = fullText.match(/Item\s*Code\s*:\s*([^\s]+)/i);
+            const itemCode = codeMatch ? codeMatch[1].trim() : 'Not Found';
+
+            // Match Item Name
+            const nameMatch = fullText.match(/Item\s*Name\s*:\s*(.*?)(?=\s*(?:Part\s*Code|Units|Type|Item\s*Type|Material|Gross|BOM|\n|$))/i);
+            const itemName = nameMatch ? nameMatch[1].trim() : 'Not Found';
+
+            // Match Item Type
+            const typeMatch = fullText.match(/Item\s*Type\s*:\s*(.*?)(?=\s*(?:Material|Gross|Net|Cut|Units|BOM|\n|$))/i);
+            const itemType = typeMatch ? typeMatch[1].trim() : 'Not Found';
+
+            pdf.cleanup();
+            pdf.destroy();
+
+            return { fileName: file.name, itemCode: itemCode, itemName: itemName, itemType: itemType };
+        } catch (e) {
+            return { fileName: file.name, itemCode: 'Error', itemName: 'Error', itemType: 'Error' };
+        }
+    }
+
+    // Process Raw Excel Export & Filter Assembly / Sub Assembly
+    function processExcelFile(file) {
+        const excelFileCountText = document.getElementById('excel-file-count');
+        excelFileCountText.innerText = `Reading ${file.name}...`;
+
+        const reader = new FileReader();
+        reader.onload = function(e) {
+            try {
+                const data = new Uint8Array(e.target.result);
+                const workbook = XLSX.read(data, { type: 'array' });
+                const firstSheetName = workbook.SheetNames[0];
+                const worksheet = workbook.Sheets[firstSheetName];
+                const json = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+
+                systemExcelCodes = [];
+                if (json.length > 0) {
+                    const keys = Object.keys(json[0]);
+                    
+                    // Auto-detect Item Code column name
+                    let codeKey = keys.find(k => {
+                        const clean = k.trim().toUpperCase();
+                        return clean.includes('ITEM CODE') || clean.includes('CODE') || clean.includes('SKU');
+                    }) || keys[0];
+
+                    // Auto-detect Item Type column name
+                    let typeKey = keys.find(k => {
+                        const clean = k.trim().toUpperCase();
+                        return clean.includes('ITEM TYPE') || clean.includes('TYPE');
+                    });
+
+                    json.forEach(row => {
+                        let codeVal = row[codeKey];
+                        
+                        // Condition check: Item Type MUST be "ASSEMBLY" or "SUB ASSEMBLY"
+                        let isValidType = true;
+                        if (typeKey) {
+                            let typeVal = String(row[typeKey] || '').trim().toUpperCase();
+                            isValidType = (typeVal === 'ASSEMBLY' || typeVal === 'SUB ASSEMBLY' || typeVal === 'SUB-ASSEMBLY');
+                        }
+
+                        if (isValidType && codeVal !== undefined && codeVal !== null && String(codeVal).trim() !== '') {
+                            systemExcelCodes.push(String(codeVal).trim());
+                        }
+                    });
+                }
+
+                excelFileCountText.innerText = `Loaded ${systemExcelCodes.length} codes (Filtered: ASSEMBLY / SUB ASSEMBLY)`;
+                runComparison();
+            } catch (err) {
+                excelFileCountText.innerText = `Error reading Excel file!`;
+                console.error(err);
+            }
+        };
+        reader.readAsArrayBuffer(file);
+    }
+
+    // Comparison logic
+    function runComparison() {
+        finalComparisonData = [];
+
+        const pdfCodeCounts = {};
+        pdfExtractedData.forEach(item => {
+            if (item.itemCode !== 'Not Found' && item.itemCode !== 'Error') {
+                pdfCodeCounts[item.itemCode] = (pdfCodeCounts[item.itemCode] || 0) + 1;
+            }
+        });
+
+        const excelCodeCounts = {};
+        systemExcelCodes.forEach(code => {
+            excelCodeCounts[code] = (excelCodeCounts[code] || 0) + 1;
+        });
+
+        const excelCodeSet = new Set(systemExcelCodes);
+        const pdfFoundCodesSet = new Set();
+
+        pdfExtractedData.forEach(pdfItem => {
+            const code = pdfItem.itemCode;
+            const name = pdfItem.itemName;
+            const type = pdfItem.itemType;
+            let statuses = [];
+
+            if (code === 'Not Found' || code === 'Error') {
+                statuses.push('NOT_FOUND');
+            } else {
+                pdfFoundCodesSet.add(code);
+                if (pdfCodeCounts[code] > 1) {
+                    statuses.push('DUPLICATE_PDF');
+                }
+                if (systemExcelCodes.length > 0 && !excelCodeSet.has(code)) {
+                    statuses.push('MISSING_IN_EXCEL');
+                }
+            }
+
+            if (statuses.length === 0) statuses.push('MATCHED');
+
+            finalComparisonData.push({
+                source: pdfItem.fileName,
+                itemCode: code,
+                itemName: name,
+                itemType: type,
+                statuses: statuses
+            });
+        });
+
+        if (systemExcelCodes.length > 0) {
+            systemExcelCodes.forEach(code => {
+                let statuses = [];
+                if (excelCodeCounts[code] > 1) {
+                    statuses.push('DUPLICATE_EXCEL');
+                }
+                if (!pdfFoundCodesSet.has(code)) {
+                    statuses.push('MISSING_IN_PDF');
+                    finalComparisonData.push({
+                        source: 'System Excel Export',
+                        itemCode: code,
+                        itemName: '-',
+                        itemType: '-',
+                        statuses: statuses
+                    });
+                }
+            });
+        }
+
+        // Numerical & alphabetical sorting
+        finalComparisonData.sort((a, b) => {
+            const numA = parseInt(a.itemCode, 10);
+            const numB = parseInt(b.itemCode, 10);
+            if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
+            return a.itemCode.localeCompare(b.itemCode, undefined, { numeric: true, sensitivity: 'base' });
+        });
+
+        updateSummaryAndTable();
+    }
+
+    function updateSummaryAndTable() {
+        let pdfTotal = pdfExtractedData.length;
+        let excelTotal = systemExcelCodes.length;
+        let duplicateCount = 0;
+        let notFoundCount = 0;
+        let missingExcelCount = 0;
+        let missingPdfCount = 0;
+
+        finalComparisonData.forEach(row => {
+            if (row.statuses.includes('NOT_FOUND')) notFoundCount++;
+            if (row.statuses.includes('MISSING_IN_EXCEL')) missingExcelCount++;
+            if (row.statuses.includes('MISSING_IN_PDF')) missingPdfCount++;
+            if (row.statuses.includes('DUPLICATE_PDF') || row.statuses.includes('DUPLICATE_EXCEL')) duplicateCount++;
+        });
+
+        document.getElementById('cnt-pdf-total').innerText = pdfTotal;
+        document.getElementById('cnt-excel-total').innerText = excelTotal;
+        document.getElementById('cnt-duplicates').innerText = duplicateCount;
+        document.getElementById('cnt-notfound').innerText = notFoundCount;
+        document.getElementById('cnt-missing-excel').innerText = missingExcelCount;
+        document.getElementById('cnt-missing-pdf').innerText = missingPdfCount;
+
+        if (finalComparisonData.length > 0) {
+            document.getElementById('export-btn').disabled = false;
+            document.getElementById('status-msg').innerText = `Comparison complete.`;
+        }
+
+        renderTable();
+    }
+
+    function setFilter(filterType, btnElem) {
+        currentFilter = filterType;
+        document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
+        if (btnElem) btnElem.classList.add('active');
+        renderTable();
+    }
+
+    function renderTable() {
+        const tableBody = document.getElementById('table-body');
+        
+        let filtered = finalComparisonData.filter(row => {
+            if (currentFilter === 'ALL') return true;
+            if (currentFilter === 'DUPLICATE') return row.statuses.includes('DUPLICATE_PDF') || row.statuses.includes('DUPLICATE_EXCEL');
+            if (currentFilter === 'NOT_FOUND') return row.statuses.includes('NOT_FOUND');
+            if (currentFilter === 'MISSING_IN_EXCEL') return row.statuses.includes('MISSING_IN_EXCEL');
+            if (currentFilter === 'MISSING_IN_PDF') return row.statuses.includes('MISSING_IN_PDF');
+            return true;
+        });
+
+        if (filtered.length === 0) {
+            tableBody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#888;">No records match the selected filter.</td></tr>';
+            return;
+        }
+
+        const displayLimit = 300;
+        const displayData = filtered.slice(0, displayLimit);
+        let htmlStr = '';
+
+        for (let row of displayData) {
+            let badgesHtml = row.statuses.map(st => {
+                if (st === 'DUPLICATE_PDF') return '<span class="badge badge-duplicate">Duplicate in PDF</span>';
+                if (st === 'DUPLICATE_EXCEL') return '<span class="badge badge-duplicate">Duplicate in Excel</span>';
+                if (st === 'NOT_FOUND') return '<span class="badge badge-notfound">Not Found in PDF</span>';
+                if (st === 'MISSING_IN_EXCEL') return '<span class="badge badge-missing-excel">Missing in System Excel</span>';
+                if (st === 'MISSING_IN_PDF') return '<span class="badge badge-missing-pdf">Missing in PDF</span>';
+                if (st === 'MATCHED') return '<span class="badge badge-match">Matched</span>';
+                return '';
+            }).join(' ');
+
+            htmlStr += `<tr>
+                <td>${row.source}</td>
+                <td><strong>${row.itemCode}</strong></td>
+                <td>${row.itemName || '-'}</td>
+                <td>${row.itemType || '-'}</td>
+                <td>${badgesHtml}</td>
+            </tr>`;
+        }
+
+        if (filtered.length > displayLimit) {
+            htmlStr += `<tr><td colspan="5" style="text-align:center; color:#e67e22;"><em>+ ${filtered.length - displayLimit} more rows hidden from preview (all will be exported to Excel).</em></td></tr>`;
+        }
+
+        tableBody.innerHTML = htmlStr;
+    }
+
+    function exportToExcel() {
+        if (!finalComparisonData.length) return;
+
+        const excelRows = finalComparisonData.map(item => ({
+            "Source / File Name": item.source,
+            "Item Code": item.itemCode,
+            "Item Name": item.itemName || '-',
+            "Item Type": item.itemType || '-',
+            "Findings / Status": item.statuses.map(st => {
+                if (st === 'DUPLICATE_PDF') return 'Duplicate in PDF';
+                if (st === 'DUPLICATE_EXCEL') return 'Duplicate in System Excel';
+                if (st === 'NOT_FOUND') return 'Not Found in PDF';
+                if (st === 'MISSING_IN_EXCEL') return 'Missing in System Excel';
+                if (st === 'MISSING_IN_PDF') return 'Missing in PDF';
+                if (st === 'MATCHED') return 'Matched';
+                return st;
+            }).join(' | ')
+        }));
+
+        const worksheet = XLSX.utils.json_to_sheet(excelRows);
+        const workbook = XLSX.utils.book_new();
+        XLSX.utils.book_append_sheet(workbook, worksheet, "Item Code Discrepancies");
+
+        XLSX.writeFile(workbook, "Item_Code_Comparison_Report.xlsx");
     }
 </script>
 
