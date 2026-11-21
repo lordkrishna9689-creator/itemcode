@@ -1,1273 +1,1261 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PDF & System Item Code Comparator</title>
-    <!-- PDF.js Library (JavaScript) for reading PDFs in browser -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <!-- SheetJS (JavaScript) Library for parsing & exporting Excel in browser -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ERP BOM — Assembly BOP Item Lookup & Print Tool</title>
+  <!-- Tailwind CSS for clean, responsive industrial UI -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- SheetJS (XLSX) for client-side Excel parsing (.xlsx, .xls, .csv) -->
+  <script src="https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js"></script>
+  <!-- Google Fonts: Inter & JetBrains Mono -->
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet">
 
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 30px;
-            background-color: #f4f6f9;
-            color: #333;
-        }
-        .container {
-            max-width: 1000px;
-            margin: 0 auto;
-            background: #ffffff;
-            padding: 25px;
-            border-radius: 8px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-        }
-        h2 {
-            margin-top: 0;
-            color: #2c3e50;
-        }
-        .grid-uploads {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-        .upload-section {
-            border: 2px dashed #3498db;
-            padding: 20px;
-            text-align: center;
-            border-radius: 6px;
-            background: #ebf5fb;
-            transition: background 0.3s;
-            cursor: pointer;
-        }
-        .upload-section.dragover {
-            background-color: #d4e6f1;
-        }
-        .upload-section.excel-section {
-            border-color: #27ae60;
-            background: #eafaf1;
-        }
-        .upload-section.excel-section.dragover {
-            background-color: #d5f5e3;
-        }
-        input[type="file"] {
-            display: none;
-        }
-        .custom-file-upload {
-            display: inline-block;
-            padding: 10px 16px;
-            cursor: pointer;
-            background-color: #3498db;
-            color: white;
-            border-radius: 4px;
-            font-weight: bold;
-            transition: background 0.3s;
-            font-size: 13px;
-        }
-        .custom-file-upload:hover {
-            background-color: #2980b9;
-        }
-        .custom-file-upload.excel-btn {
-            background-color: #27ae60;
-        }
-        .custom-file-upload.excel-btn:hover {
-            background-color: #1e8449;
-        }
-        .summary-cards {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-        .card {
-            background: #f8f9fa;
-            border: 1px solid #e9ecef;
-            border-radius: 6px;
-            padding: 12px;
-            text-align: center;
-        }
-        .card-num {
-            font-size: 20px;
-            font-weight: bold;
-            color: #2c3e50;
-        }
-        .card-label {
-            font-size: 12px;
-            color: #6c757d;
-            margin-top: 4px;
-        }
-        .filter-bar {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 15px;
-            flex-wrap: wrap;
-        }
-        .filter-btn {
-            padding: 6px 14px;
-            background: #e0e0e0;
-            color: #333;
-            border: none;
-            border-radius: 20px;
-            font-size: 13px;
-            font-weight: bold;
-            cursor: pointer;
-        }
-        .filter-btn.active {
-            background: #3498db;
-            color: #fff;
-        }
-        .actions {
-            margin-bottom: 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        button.action-btn {
-            padding: 10px 18px;
-            background-color: #2ecc71;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            font-size: 14px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: background 0.3s;
-        }
-        button.action-btn:hover {
-            background-color: #27ae60;
-        }
-        button.action-btn:disabled {
-            background-color: #bdc3c7;
-            cursor: not-allowed;
-        }
-        .progress-bar-container {
-            width: 100%;
-            background-color: #e0e0e0;
-            border-radius: 4px;
-            margin-bottom: 15px;
-            display: none;
-        }
-        .progress-bar {
-            width: 0%;
-            height: 12px;
-            background-color: #2ecc71;
-            border-radius: 4px;
-            transition: width 0.1s;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 10px;
-        }
-        th, td {
-            border: 1px solid #ddd;
-            padding: 9px;
-            text-align: left;
-            font-size: 13px;
-        }
-        th {
-            background-color: #f2f2f2;
-            color: #2c3e50;
-        }
-        tr:nth-child(even) {
-            background-color: #f9f9f9;
-        }
-        .badge {
-            display: inline-block;
-            padding: 3px 8px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: bold;
-            color: white;
-        }
-        .badge-duplicate { background-color: #e67e22; }
-        .badge-notfound { background-color: #e74c3c; }
-        .badge-missing-excel { background-color: #9b59b6; }
-        .badge-missing-pdf { background-color: #34495e; }
-        .badge-match { background-color: #2ecc71; }
-    </style>
+  <style>
+    body {
+      font-family: 'Inter', sans-serif;
+      background-color: #f1f5f9;
+      color: #0f172a;
+    }
+
+    .font-mono-code {
+      font-family: 'JetBrains Mono', monospace;
+    }
+
+    /* Custom subtle scrollbar */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: #f1f5f9;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: #cbd5e1;
+      border-radius: 4px;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: #94a3b8;
+    }
+
+    /* Dedicated Print Styling for Shop-Floor / Store BOP Sheet */
+    @media print {
+      @page {
+        size: A4 portrait;
+        margin: 12mm;
+      }
+
+      body {
+        background: #ffffff !important;
+        color: #000000 !important;
+        font-size: 11pt;
+      }
+
+      .no-print {
+        display: none !important;
+      }
+
+      .print-only {
+        display: block !important;
+      }
+
+      .print-container {
+        box-shadow: none !important;
+        border: none !important;
+        padding: 0 !important;
+        margin: 0 !important;
+        width: 100% !important;
+        max-width: 100% !important;
+      }
+
+      .print-header-box {
+        border: 1.5px solid #000000 !important;
+        background-color: #f8fafc !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        padding: 10px 14px !important;
+        margin-bottom: 12px !important;
+      }
+
+      table.bop-table {
+        width: 100% !important;
+        border-collapse: collapse !important;
+        font-size: 9.5pt !important;
+      }
+
+      table.bop-table th,
+      table.bop-table td {
+        border: 1px solid #334155 !important;
+        padding: 6px 8px !important;
+        color: #000000 !important;
+      }
+
+      table.bop-table th {
+        background-color: #e2e8f0 !important;
+        -webkit-print-color-adjust: exact;
+        print-color-adjust: exact;
+        font-weight: 700 !important;
+      }
+
+      table.bop-table tr {
+        page-break-inside: avoid;
+      }
+    }
+  </style>
 </head>
-<body>
+<body class="min-h-screen flex flex-col">
 
-<div class="container">
-    <h2>PDF & System Item Code Comparator</h2>
-    <p>Upload your PDFs/folders and raw System Excel sheet. Automatically extracts <b>Item Code, Item Name, & Item Type</b> from PDFs and filters Excel by <b>ASSEMBLY / SUB ASSEMBLY</b>.</p>
+  <!-- Toast / Status Notification Banner -->
+  <div id="toast" class="no-print fixed bottom-5 right-5 z-50 hidden transform transition-all duration-300 max-w-md rounded-xl shadow-lg border px-4 py-3 text-sm font-medium flex items-center gap-3">
+    <span id="toastIcon"></span>
+    <span id="toastMsg"></span>
+  </div>
 
-    <div class="grid-uploads">
-        <!-- PDF Upload Zone -->
-        <div class="upload-section" id="pdf-drop-zone">
-            <label for="pdf-input" class="custom-file-upload">
-                1. Select / Drop PDFs or Folders
-            </label>
-            <input type="file" id="pdf-input" multiple webkitdirectory accept="application/pdf">
-            <p id="pdf-file-count" style="margin-top: 10px; font-size: 12px; color: #555;">No PDFs loaded</p>
+  <!-- Top Navigation Header -->
+  <header class="no-print bg-slate-900 text-white border-b border-slate-800 sticky top-0 z-30 shadow-sm">
+    <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-3.5 flex flex-wrap items-center justify-between gap-4">
+      <div class="flex items-center gap-3">
+        <div class="bg-blue-600 p-2 rounded-lg shadow-inner">
+          <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+        </div>
+        <div>
+          <h1 class="text-lg sm:text-xl font-bold tracking-tight leading-tight">ERP Assembly BOP Finder</h1>
+          <p class="text-xs text-slate-400">Upload Raw BOM Export &bull; Instant BOP Breakdown &bull; Print Ready</p>
+        </div>
+      </div>
+
+      <!-- Database Status Pill -->
+      <div class="flex items-center gap-2 sm:gap-3 flex-wrap">
+        <div id="dbStatusBadge" class="flex items-center gap-2 bg-slate-800 border border-slate-700 px-3 py-1.5 rounded-lg text-xs">
+          <span id="dbDot" class="w-2.5 h-2.5 rounded-full bg-amber-400"></span>
+          <span id="dbStatusText" class="text-slate-300 font-medium">No ERP Database Loaded</span>
+        </div>
+        <button id="toggleUploadBtn" type="button" class="bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-600 px-3 py-1.5 rounded-lg text-xs font-semibold transition flex items-center gap-1.5">
+          <svg class="w-4 h-4 text-blue-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" />
+          </svg>
+          <span>Upload / Update Excel</span>
+        </button>
+      </div>
+    </div>
+  </header>
+
+  <!-- Main Content Area -->
+  <main class="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-6 space-y-6">
+
+    <!-- Step 1: ERP Excel Upload & Database Management Panel -->
+    <section id="uploadSection" class="no-print bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden transition-all">
+      <div class="bg-slate-50 border-b border-slate-200 px-5 py-3.5 flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <span class="bg-blue-100 text-blue-700 text-xs font-bold px-2.5 py-0.5 rounded-md">STEP 1</span>
+          <h2 class="font-semibold text-slate-800 text-sm sm:text-base">ERP Excel Database Setup</h2>
+        </div>
+        <div class="flex items-center gap-2">
+          <button id="loadSampleBtn" type="button" class="text-xs font-semibold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-3 py-1.5 rounded-lg transition">
+            Load Sample Data (from your sheet)
+          </button>
+          <button id="clearDbBtn" type="button" class="hidden text-xs font-semibold text-rose-600 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 border border-rose-200 px-3 py-1.5 rounded-lg transition">
+            Clear Saved DB
+          </button>
+        </div>
+      </div>
+
+      <div class="p-5 grid grid-cols-1 lg:grid-cols-3 gap-6 items-center">
+        <!-- Drag & Drop Upload Box -->
+        <div class="lg:col-span-2">
+          <label id="dropZone" for="excelFileInput" class="flex flex-col items-center justify-center w-full h-40 border-2 border-dashed border-slate-300 hover:border-blue-500 bg-slate-50 hover:bg-blue-50/40 rounded-xl cursor-pointer transition p-4 text-center">
+            <svg class="w-9 h-9 text-blue-600 mb-2" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+            </svg>
+            <p class="text-sm font-semibold text-slate-700">Click to select or drag &amp; drop your raw ERP Excel file</p>
+            <p class="text-xs text-slate-500 mt-1">Supports <span class="font-semibold">.xlsx, .xls, .csv</span> &bull; Automatically saved in browser memory for future sessions</p>
+            <input id="excelFileInput" type="file" accept=".xlsx,.xls,.csv" class="hidden" />
+          </label>
         </div>
 
-        <!-- Excel Upload Zone -->
-        <div class="upload-section excel-section" id="excel-drop-zone">
-            <label for="excel-input" class="custom-file-upload excel-btn">
-                2. Upload System Raw Excel Sheet
+        <!-- Template Mapping & Smart Parsing Options -->
+        <div class="bg-slate-50 border border-slate-200 rounded-xl p-4 space-y-3 text-xs">
+          <div class="font-semibold text-slate-800 flex items-center gap-1.5">
+            <svg class="w-4 h-4 text-emerald-600" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            <span>Matched to Your ERP Columns:</span>
+          </div>
+          <ul class="space-y-1 text-slate-600">
+            <li><strong class="text-slate-800">Col A:</strong> ASSEMBLY (Code &amp; Name)</li>
+            <li><strong class="text-slate-800">Col B &amp; C:</strong> Level 1 &amp; Level 2 Component</li>
+            <li><strong class="text-slate-800">Col D:</strong> Type (e.g., <code class="bg-slate-200 px-1 rounded">BOP</code>)</li>
+            <li><strong class="text-slate-800">Col E:</strong> BOM Qty</li>
+            <li><strong class="text-slate-800">Col F &amp; G:</strong> Material Section &amp; Grade</li>
+          </ul>
+          <div class="pt-2 border-t border-slate-200">
+            <label class="flex items-start gap-2 cursor-pointer select-none">
+              <input id="forwardFillToggle" type="checkbox" checked class="mt-0.5 rounded text-blue-600 focus:ring-blue-500" />
+              <span class="text-slate-700 leading-tight">
+                <strong>Auto-fill blank Assembly cells</strong> (Recommended when Col A has blank rows below an Assembly header)
+              </span>
             </label>
-            <input type="file" id="excel-input" accept=".xlsx, .xls, .csv">
-            <p id="excel-file-count" style="margin-top: 10px; font-size: 12px; color: #555;">No Excel loaded</p>
+          </div>
         </div>
-    </div>
+      </div>
+    </section>
 
-    <div class="progress-bar-container" id="progress-container">
-        <div class="progress-bar" id="progress-bar"></div>
-    </div>
+    <!-- Step 2: Search Assembly Item Code / Name -->
+    <section class="no-print bg-white rounded-2xl border border-slate-200 shadow-sm p-5 space-y-4">
+      <div class="flex flex-wrap items-center justify-between gap-2">
+        <div class="flex items-center gap-2">
+          <span class="bg-emerald-100 text-emerald-800 text-xs font-bold px-2.5 py-0.5 rounded-md">STEP 2</span>
+          <h2 class="font-semibold text-slate-800 text-sm sm:text-base">Search Assembly Item Code or Description</h2>
+        </div>
 
-    <!-- Summary Cards -->
-    <div class="summary-cards">
-        <div class="card"><div class="card-num" id="cnt-pdf-total">0</div><div class="card-label">PDFs Processed</div></div>
-        <div class="card"><div class="card-num" id="cnt-excel-total">0</div><div class="card-label">System Excel Codes</div></div>
-        <div class="card"><div class="card-num" id="cnt-duplicates" style="color:#e67e22;">0</div><div class="card-label">Duplicates Found</div></div>
-        <div class="card"><div class="card-num" id="cnt-notfound" style="color:#e74c3c;">0</div><div class="card-label">Not Found in PDF</div></div>
-        <div class="card"><div class="card-num" id="cnt-missing-excel" style="color:#9b59b6;">0</div><div class="card-label">Missing in Excel</div></div>
-        <div class="card"><div class="card-num" id="cnt-missing-pdf" style="color:#34495e;">0</div><div class="card-label">Missing in PDF</div></div>
-    </div>
+        <!-- Type Filter Toggle -->
+        <div class="flex items-center gap-3 text-xs">
+          <span class="text-slate-500 font-medium">Item Type Filter:</span>
+          <div class="inline-flex rounded-lg border border-slate-200 bg-slate-100 p-0.5">
+            <button type="button" id="filterBopOnlyBtn" class="px-3 py-1 rounded-md font-semibold bg-white text-blue-700 shadow-sm transition">
+              BOP Only
+            </button>
+            <button type="button" id="filterAllTypesBtn" class="px-3 py-1 rounded-md font-semibold text-slate-600 hover:text-slate-900 transition">
+              All Types
+            </button>
+          </div>
+        </div>
+      </div>
 
-    <div class="filter-bar">
-        <button class="filter-btn active" onclick="setFilter('ALL', this)">All Results</button>
-        <button class="filter-btn" onclick="setFilter('DUPLICATE', this)">Duplicates</button>
-        <button class="filter-btn" onclick="setFilter('NOT_FOUND', this)">Not Found in PDF</button>
-        <button class="filter-btn" onclick="setFilter('MISSING_IN_EXCEL', this)">Missing in Excel</button>
-        <button class="filter-btn" onclick="setFilter('MISSING_IN_PDF', this)">Missing in PDF</button>
-    </div>
+      <!-- Search Input + Autocomplete Dropdown -->
+      <div class="relative">
+        <div class="flex flex-col sm:flex-row gap-2.5">
+          <div class="relative flex-1">
+            <div class="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none">
+              <svg class="w-5 h-5 text-slate-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+              </svg>
+            </div>
+            <input
+              id="assemblySearchInput"
+              type="text"
+              autocomplete="off"
+              placeholder="Enter Assembly Code or Name (e.g., 0029725 or JEEP FRONT)..."
+              class="w-full pl-11 pr-10 py-3 bg-slate-50 border border-slate-300 focus:bg-white focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 rounded-xl text-sm sm:text-base font-medium text-slate-900 outline-none transition"
+            />
+            <button id="clearSearchBtn" type="button" title="Clear Search" class="hidden absolute inset-y-0 right-0 pr-3.5 flex items-center text-slate-400 hover:text-slate-700">
+              <svg class="w-5 h-5" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
 
-    <div class="actions">
-        <span id="status-msg" style="font-size: 13px; color: #555;">Upload PDFs and System Excel sheet to analyze.</span>
-        <button id="export-btn" class="action-btn" onclick="exportToExcel()" disabled>Export Comparison Report</button>
-    </div>
+          <button id="searchActionBtn" type="button" class="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold px-6 py-3 rounded-xl shadow-sm transition flex items-center justify-center gap-2 text-sm sm:text-base">
+            <span>Find BOP Items</span>
+          </button>
+        </div>
 
-    <table id="result-table">
-        <thead>
-            <tr>
-                <th>Source / File Name</th>
-                <th>Item Code</th>
-                <th>Item Name</th>
-                <th>Item Type</th>
-                <th>Status / Findings</th>
+        <!-- Live Autocomplete Suggestions Dropdown -->
+        <div id="suggestionsBox" class="hidden absolute left-0 right-0 mt-1.5 bg-white border border-slate-200 rounded-xl shadow-xl max-h-72 overflow-y-auto z-20 divide-y divide-slate-100">
+          <!-- Populated dynamically -->
+        </div>
+      </div>
+
+      <!-- Quick Assembly Chips (Shows top available assemblies for 1-click access) -->
+      <div id="quickChipsContainer" class="hidden pt-1 flex flex-wrap items-center gap-2 text-xs">
+        <span class="text-slate-500 font-medium">Available Assemblies:</span>
+        <div id="quickChipsList" class="flex flex-wrap gap-1.5"></div>
+      </div>
+    </section>
+
+    <!-- Step 3: BOP Results & Print Sheet Container -->
+    <section id="resultsSection" class="hidden print-container bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+      
+      <!-- Print-Only Official Document Title Banner -->
+      <div class="hidden print-only mb-3 border-b-2 border-black pb-2 flex justify-between items-end">
+        <div>
+          <h1 class="text-lg font-bold uppercase tracking-wide">ASSEMBLY BOP REQUIREMENT SHEET</h1>
+          <p class="text-xs text-gray-700">Multi-Level Bill of Materials &bull; Bought Out Parts (BOP) Issue Report</p>
+        </div>
+        <div class="text-right text-xs">
+          <p><strong>Print Date:</strong> <span id="printTimestamp"></span></p>
+        </div>
+      </div>
+
+      <!-- Assembly Summary Header & Action Toolbar -->
+      <div class="print-header-box bg-slate-900 text-white px-5 py-4 flex flex-col md:flex-row md:items-center justify-between gap-4">
+        <div class="space-y-1">
+          <div class="flex items-center gap-2 flex-wrap">
+            <span id="assemblyTypeBadge" class="text-[11px] uppercase tracking-wider font-bold bg-blue-500/20 text-blue-300 border border-blue-400/30 px-2 py-0.5 rounded print:text-black print:bg-transparent print:border-black">
+              ASSEMBLY
+            </span>
+            <span id="assemblyCodeBadge" class="font-mono-code text-xs sm:text-sm font-semibold bg-slate-800 text-amber-300 border border-slate-700 px-2.5 py-0.5 rounded print:text-black print:bg-transparent print:border-black">
+              ITEM CODE: —
+            </span>
+            <span id="internalCodeBadge" class="font-mono-code text-xs sm:text-sm font-semibold bg-slate-800 text-emerald-300 border border-slate-700 px-2.5 py-0.5 rounded print:text-black print:bg-transparent print:border-black">
+              INTERNAL CODE: —
+            </span>
+          </div>
+          <h3 id="selectedAssemblyTitle" class="text-lg sm:text-xl font-bold tracking-tight print:text-black">
+            —
+          </h3>
+          <div class="flex flex-wrap items-center gap-4 text-xs sm:text-sm text-slate-300 print:text-black pt-0.5">
+            <span>Units: <strong id="selectedUnitsText" class="text-white print:text-black">NOS</strong></span>
+            <span>&bull;</span>
+            <span>Total BOP Items: <strong id="totalItemsCount" class="text-white print:text-black">0</strong></span>
+            <span>&bull;</span>
+            <span>Total BOP Qty: <strong id="totalBomQtyCount" class="text-white print:text-black">0</strong></span>
+          </div>
+        </div>
+
+        <!-- Action Buttons (Hidden on Print) -->
+        <div class="no-print flex flex-wrap items-center gap-2.5">
+          <button id="copyTableBtn" type="button" class="bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-600 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-2">
+            <svg class="w-4 h-4 text-slate-300" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+            </svg>
+            <span>Copy List</span>
+          </button>
+
+          <button id="exportCsvBtn" type="button" class="bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-600 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-2">
+            <svg class="w-4 h-4 text-emerald-400" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
+            <span>Export CSV</span>
+          </button>
+
+          <button id="printBtn" type="button" class="bg-emerald-600 hover:bg-emerald-500 active:bg-emerald-700 text-white px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold shadow-md transition flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+            </svg>
+            <span>Print BOP Sheet</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Secondary Filter Bar inside Results (Hidden on Print) -->
+      <div class="no-print bg-slate-50 border-b border-slate-200 px-5 py-3 flex flex-wrap items-center justify-between gap-3">
+        <div class="relative w-full sm:w-80">
+          <input
+            id="innerFilterInput"
+            type="text"
+            placeholder="Filter BOP code, name, grade, or source..."
+            class="w-full pl-9 pr-3 py-1.5 bg-white border border-slate-300 rounded-lg text-xs sm:text-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none"
+          />
+          <svg class="w-4 h-4 text-slate-400 absolute left-3 top-2" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+          </svg>
+        </div>
+
+        <label class="flex items-center gap-2 text-xs text-slate-700 font-medium cursor-pointer select-none">
+          <input id="consolidateDupesToggle" type="checkbox" checked class="rounded text-blue-600 focus:ring-blue-500" />
+          <span>Aggregate identical BOP codes (sum Qty)</span>
+        </label>
+      </div>
+
+      <!-- BOP Items Table -->
+      <div class="overflow-x-auto">
+        <table class="bop-table w-full text-left border-collapse">
+          <thead>
+            <tr class="bg-slate-100 border-b border-slate-200 text-slate-700 text-xs uppercase tracking-wider">
+              <th class="py-3 px-3 font-bold w-14 text-center">Sr. No.</th>
+              <th class="py-3 px-3 font-bold w-28">BOP Code</th>
+              <th class="py-3 px-3 font-bold">BOP Item Name</th>
+              <th class="py-3 px-3 font-bold w-32">Material Grade</th>
+              <th class="py-3 px-3 font-bold w-32">Material Section</th>
+              <th class="py-3 px-3 font-bold w-24 text-center">BOM Qty</th>
+              <th class="py-3 px-3 font-bold w-20 text-center">Unit</th>
+              <th class="py-3 px-3 font-bold w-56">Used In / Source</th>
             </tr>
-        </thead>
-        <tbody id="table-body">
-            <tr>
-                <td colspan="5" style="text-align: center; color: #888;">Upload files above to run extraction and matching.</td>
-            </tr>
-        </tbody>
-    </table>
-</div>
+          </thead>
+          <tbody id="bopTableBody" class="divide-y divide-slate-200 text-sm">
+            <!-- Populated dynamically -->
+          </tbody>
+        </table>
+      </div>
 
-<script>
-    // Initialize PDF.js worker
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+      <!-- Print-Only Verification & Store Sign-Off Footer -->
+      <div class="hidden print-only mt-10 pt-6 border-t border-black grid grid-cols-3 gap-8 text-xs">
+        <div>
+          <p class="mb-8 font-semibold">Prepared By:</p>
+          <div class="border-t border-black pt-1">Signature &amp; Date</div>
+        </div>
+        <div>
+          <p class="mb-8 font-semibold">Checked By / Store:</p>
+          <div class="border-t border-black pt-1">Signature &amp; Date</div>
+        </div>
+        <div>
+          <p class="mb-8 font-semibold">Approved By:</p>
+          <div class="border-t border-black pt-1">Signature &amp; Date</div>
+        </div>
+      </div>
+    </section>
 
-    let pdfExtractedData = [];
-    let systemExcelCodes = [];
-    let finalComparisonData = [];
-    let currentFilter = 'ALL';
+    <!-- Empty / Initial State Placeholder -->
+    <section id="emptyStateSection" class="no-print bg-white rounded-2xl border border-slate-200 p-10 text-center space-y-3">
+      <div class="w-14 h-14 bg-slate-100 text-slate-400 rounded-2xl flex items-center justify-center mx-auto">
+        <svg class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="1.8" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10" />
+        </svg>
+      </div>
+      <h3 class="text-base font-bold text-slate-800">Ready to Search Assembly BOP Items</h3>
+      <p class="text-sm text-slate-500 max-w-md mx-auto">
+        Upload your ERP Excel export above (or click <strong>"Load Sample Data"</strong> to test immediately), then search any Assembly code like <code class="bg-slate-100 px-1.5 py-0.5 rounded text-slate-700 font-mono-code">0029725</code>.
+      </p>
+    </section>
 
-    const pdfDropZone = document.getElementById('pdf-drop-zone');
-    const excelDropZone = document.getElementById('excel-drop-zone');
+  </main>
 
-    // Drag-and-drop event listeners for PDFs
-    pdfDropZone.addEventListener('dragover', (e) => { e.preventDefault(); pdfDropZone.classList.add('dragover'); });
-    pdfDropZone.addEventListener('dragleave', () => pdfDropZone.classList.remove('dragover'));
-    pdfDropZone.addEventListener('drop', async (e) => {
-        e.preventDefault();
-        pdfDropZone.classList.remove('dragover');
-        const items = e.dataTransfer.items;
-        if (!items) return;
+  <!-- Application Logic -->
+  <script>
+    (function () {
+      'use strict';
 
-        let pdfFiles = [];
-        for (let i = 0; i < items.length; i++) {
-            const entry = items[i].webkitGetAsEntry ? items[i].webkitGetAsEntry() : null;
-            if (entry) await scanFiles(entry, pdfFiles);
-        }
-        if (pdfFiles.length > 0) processPDFFiles(pdfFiles);
-    });
+      // IndexedDB Configuration for large 12,000+ row ERP exports
+      const IDB_NAME = 'ERP_BOM_BOP_DB';
+      const IDB_STORE = 'bomStore';
+      const IDB_KEY = 'activeDatabase';
 
-    document.getElementById('pdf-input').addEventListener('change', function(e) {
-        const files = Array.from(e.target.files).filter(f => f.name.toLowerCase().endsWith('.pdf'));
-        if (files.length > 0) processPDFFiles(files);
-    });
+      // Application State
+      let parentMap = new Map();      // Normalized Item Code -> Parent Item Object
+      let searchableParents = [];     // Sorted array of parent objects (ASSEMBLY & SUB ASSEMBLY)
+      let selectedParent = null;      // Currently selected parent object
+      let parentTypeFilter = 'ALL';   // 'ALL' | 'ASSEMBLY' | 'SUB ASSEMBLY'
+      let currentDisplayedRows = [];
+      let rawBopLineCount = 0;
 
-    // Drag-and-drop event listeners for Excel
-    excelDropZone.addEventListener('dragover', (e) => { e.preventDefault(); excelDropZone.classList.add('dragover'); });
-    excelDropZone.addEventListener('dragleave', () => excelDropZone.classList.remove('dragover'));
-    excelDropZone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        excelDropZone.classList.remove('dragover');
-        if (e.dataTransfer.files.length > 0) processExcelFile(e.dataTransfer.files[0]);
-    });
+      // DOM Elements
+      const excelFileInput = document.getElementById('excelFileInput');
+      const dropZone = document.getElementById('dropZone');
+      const forwardFillToggle = document.getElementById('forwardFillToggle');
+      const loadSampleBtn = document.getElementById('loadSampleBtn');
+      const clearDbBtn = document.getElementById('clearDbBtn');
+      const toggleUploadBtn = document.getElementById('toggleUploadBtn');
+      const uploadSection = document.getElementById('uploadSection');
 
-    document.getElementById('excel-input').addEventListener('change', function(e) {
-        if (e.target.files.length > 0) processExcelFile(e.target.files[0]);
-    });
+      const dbDot = document.getElementById('dbDot');
+      const dbStatusText = document.getElementById('dbStatusText');
 
-    async function scanFiles(entry, pdfFiles) {
-        if (entry.isFile) {
-            if (entry.name.toLowerCase().endsWith('.pdf')) {
-                pdfFiles.push(await new Promise((r) => entry.file(r)));
-            }
-        } else if (entry.isDirectory) {
-            const dirReader = entry.createReader();
-            const entries = await new Promise((r) => dirReader.readEntries(r));
-            for (let child of entries) {
-                await scanFiles(child, pdfFiles);
-            }
-        }
-    }
+      const assemblySearchInput = document.getElementById('assemblySearchInput');
+      const clearSearchBtn = document.getElementById('clearSearchBtn');
+      const searchActionBtn = document.getElementById('searchActionBtn');
+      const suggestionsBox = document.getElementById('suggestionsBox');
+      const quickChipsContainer = document.getElementById('quickChipsContainer');
+      const quickChipsList = document.getElementById('quickChipsList');
 
-    async function processPDFFiles(files) {
-        const startTime = performance.now();
-        const progressContainer = document.getElementById('progress-container');
-        const progressBar = document.getElementById('progress-bar');
-        const pdfFileCountText = document.getElementById('pdf-file-count');
+      const filterBopOnlyBtn = document.getElementById('filterBopOnlyBtn');
+      const filterAllTypesBtn = document.getElementById('filterAllTypesBtn');
 
-        progressContainer.style.display = 'block';
-        progressBar.style.width = '0%';
-        pdfFileCountText.innerText = `Processing ${files.length} PDFs...`;
-        
-        pdfExtractedData = [];
-        const CHUNK_SIZE = 20;
-        let completed = 0;
+      const resultsSection = document.getElementById('resultsSection');
+      const emptyStateSection = document.getElementById('emptyStateSection');
+      const assemblyTypeBadge = document.getElementById('assemblyTypeBadge');
+      const assemblyCodeBadge = document.getElementById('assemblyCodeBadge');
+      const internalCodeBadge = document.getElementById('internalCodeBadge');
+      const selectedAssemblyTitle = document.getElementById('selectedAssemblyTitle');
+      const selectedUnitsText = document.getElementById('selectedUnitsText');
+      const totalItemsCount = document.getElementById('totalItemsCount');
+      const totalBomQtyCount = document.getElementById('totalBomQtyCount');
+      const bopTableBody = document.getElementById('bopTableBody');
+      const innerFilterInput = document.getElementById('innerFilterInput');
+      const consolidateDupesToggle = document.getElementById('consolidateDupesToggle');
 
-        for (let i = 0; i < files.length; i += CHUNK_SIZE) {
-            const chunk = files.slice(i, i + CHUNK_SIZE);
-            const chunkResults = await Promise.all(chunk.map(file => processSinglePDF(file)));
-            pdfExtractedData.push(...chunkResults);
-            completed += chunk.length;
-            const percent = Math.min(100, Math.round((completed / files.length) * 100));
-            progressBar.style.width = `${percent}%`;
-        }
+      const printBtn = document.getElementById('printBtn');
+      const copyTableBtn = document.getElementById('copyTableBtn');
+      const exportCsvBtn = document.getElementById('exportCsvBtn');
+      const printTimestamp = document.getElementById('printTimestamp');
 
-        const timeTaken = ((performance.now() - startTime) / 1000).toFixed(2);
-        pdfFileCountText.innerText = `Done! Loaded ${files.length} PDFs (${timeTaken}s)`;
-        
-        runComparison();
-    }
+      // Update Filter Button Labels to reflect Parent Item Type Filtering
+      filterBopOnlyBtn.textContent = 'ASSEMBLY Only';
+      filterAllTypesBtn.textContent = 'All Parents';
+      filterBopOnlyBtn.className = 'px-3 py-1 rounded-md font-semibold text-slate-600 hover:text-slate-900 transition';
+      filterAllTypesBtn.className = 'px-3 py-1 rounded-md font-semibold bg-white text-blue-700 shadow-sm transition';
+      assemblySearchInput.placeholder = 'Search Item Code (e.g. 22), InternalCode (29725), or Name (JEEP FRONT)...';
 
-    async function processSinglePDF(file) {
-        try {
-            const arrayBuffer = await file.arrayBuffer();
-            const pdfTask = pdfjsLib.getDocument({ data: arrayBuffer, stopAtErrors: true });
-            const pdf = await pdfTask.promise;
-            
-            const page = await pdf.getPage(1);
-            const textContent = await page.getTextContent();
-            
-            let fullText = '';
-            for (let i = 0; i < textContent.items.length; i++) {
-                fullText += textContent.items[i].str + ' ';
-            }
-
-            // Match Item Code
-            const codeMatch = fullText.match(/Item\s*Code\s*:\s*([^\s]+)/i);
-            const itemCode = codeMatch ? codeMatch[1].trim() : 'Not Found';
-
-            // Match Item Name
-            const nameMatch = fullText.match(/Item\s*Name\s*:\s*(.*?)(?=\s*(?:Part\s*Code|Units|Type|Item\s*Type|Material|Gross|BOM|\n|$))/i);
-            const itemName = nameMatch ? nameMatch[1].trim() : 'Not Found';
-
-            // Match Item Type
-            const typeMatch = fullText.match(/Item\s*Type\s*:\s*(.*?)(?=\s*(?:Material|Gross|Net|Cut|Units|BOM|\n|$))/i);
-            const itemType = typeMatch ? typeMatch[1].trim() : 'Not Found';
-
-            pdf.cleanup();
-            pdf.destroy();
-
-            return { fileName: file.name, itemCode: itemCode, itemName: itemName, itemType: itemType };
-        } catch (e) {
-            return { fileName: file.name, itemCode: 'Error', itemName: 'Error', itemType: 'Error' };
-        }
-    }
-
-    // Process Raw Excel Export & Filter Assembly / Sub Assembly
-    function processExcelFile(file) {
-        const excelFileCountText = document.getElementById('excel-file-count');
-        excelFileCountText.innerText = `Reading ${file.name}...`;
-
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            try {
-                const data = new Uint8Array(e.target.result);
-                const workbook = XLSX.read(data, { type: 'array' });
-                const firstSheetName = workbook.SheetNames[0];
-                const worksheet = workbook.Sheets[firstSheetName];
-                const json = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
-
-                systemExcelCodes = [];
-                if (json.length > 0) {
-                    const keys = Object.keys(json[0]);
-                    
-                    // Auto-detect Item Code column name
-                    let codeKey = keys.find(k => {
-                        const clean = k.trim().toUpperCase();
-                        return clean.includes('ITEM CODE') || clean.includes('CODE') || clean.includes('SKU');
-                    }) || keys[0];
-
-                    // Auto-detect Item Type column name
-                    let typeKey = keys.find(k => {
-                        const clean = k.trim().toUpperCase();
-                        return clean.includes('ITEM TYPE') || clean.includes('TYPE');
-                    });
-
-                    json.forEach(row => {
-                        let codeVal = row[codeKey];
-                        
-                        // Condition check: Item Type MUST be "ASSEMBLY" or "SUB ASSEMBLY"
-                        let isValidType = true;
-                        if (typeKey) {
-                            let typeVal = String(row[typeKey] || '').trim().toUpperCase();
-                            isValidType = (typeVal === 'ASSEMBLY' || typeVal === 'SUB ASSEMBLY' || typeVal === 'SUB-ASSEMBLY');
-                        }
-
-                        if (isValidType && codeVal !== undefined && codeVal !== null && String(codeVal).trim() !== '') {
-                            systemExcelCodes.push(String(codeVal).trim());
-                        }
-                    });
-                }
-
-                excelFileCountText.innerText = `Loaded ${systemExcelCodes.length} codes (Filtered: ASSEMBLY / SUB ASSEMBLY)`;
-                runComparison();
-            } catch (err) {
-                excelFileCountText.innerText = `Error reading Excel file!`;
-                console.error(err);
-            }
-        };
-        reader.readAsArrayBuffer(file);
-    }
-
-    // Comparison logic
-    function runComparison() {
-        finalComparisonData = [];
-
-        const pdfCodeCounts = {};
-        pdfExtractedData.forEach(item => {
-            if (item.itemCode !== 'Not Found' && item.itemCode !== 'Error') {
-                pdfCodeCounts[item.itemCode] = (pdfCodeCounts[item.itemCode] || 0) + 1;
-            }
-        });
-
-        const excelCodeCounts = {};
-        systemExcelCodes.forEach(code => {
-            excelCodeCounts[code] = (excelCodeCounts[code] || 0) + 1;
-        });
-
-        const excelCodeSet = new Set(systemExcelCodes);
-        const pdfFoundCodesSet = new Set();
-
-        pdfExtractedData.forEach(pdfItem => {
-            const code = pdfItem.itemCode;
-            const name = pdfItem.itemName;
-            const type = pdfItem.itemType;
-            let statuses = [];
-
-            if (code === 'Not Found' || code === 'Error') {
-                statuses.push('NOT_FOUND');
-            } else {
-                pdfFoundCodesSet.add(code);
-                if (pdfCodeCounts[code] > 1) {
-                    statuses.push('DUPLICATE_PDF');
-                }
-                if (systemExcelCodes.length > 0 && !excelCodeSet.has(code)) {
-                    statuses.push('MISSING_IN_EXCEL');
-                }
-            }
-
-            if (statuses.length === 0) statuses.push('MATCHED');
-
-            finalComparisonData.push({
-                source: pdfItem.fileName,
-                itemCode: code,
-                itemName: name,
-                itemType: type,
-                statuses: statuses
-            });
-        });
-
-        if (systemExcelCodes.length > 0) {
-            systemExcelCodes.forEach(code => {
-                let statuses = [];
-                if (excelCodeCounts[code] > 1) {
-                    statuses.push('DUPLICATE_EXCEL');
-                }
-                if (!pdfFoundCodesSet.has(code)) {
-                    statuses.push('MISSING_IN_PDF');
-                    finalComparisonData.push({
-                        source: 'System Excel Export',
-                        itemCode: code,
-                        itemName: '-',
-                        itemType: '-',
-                        statuses: statuses
-                    });
-                }
-            });
-        }
-
-        // Numerical & alphabetical sorting
-        finalComparisonData.sort((a, b) => {
-            const numA = parseInt(a.itemCode, 10);
-            const numB = parseInt(b.itemCode, 10);
-            if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
-            return a.itemCode.localeCompare(b.itemCode, undefined, { numeric: true, sensitivity: 'base' });
-        });
-
-        updateSummaryAndTable();
-    }
-
-    function updateSummaryAndTable() {
-        let pdfTotal = pdfExtractedData.length;
-        let excelTotal = systemExcelCodes.length;
-        let duplicateCount = 0;
-        let notFoundCount = 0;
-        let missingExcelCount = 0;
-        let missingPdfCount = 0;
-
-        finalComparisonData.forEach(row => {
-            if (row.statuses.includes('NOT_FOUND')) notFoundCount++;
-            if (row.statuses.includes('MISSING_IN_EXCEL')) missingExcelCount++;
-            if (row.statuses.includes('MISSING_IN_PDF')) missingPdfCount++;
-            if (row.statuses.includes('DUPLICATE_PDF') || row.statuses.includes('DUPLICATE_EXCEL')) duplicateCount++;
-        });
-
-        document.getElementById('cnt-pdf-total').innerText = pdfTotal;
-        document.getElementById('cnt-excel-total').innerText = excelTotal;
-        document.getElementById('cnt-duplicates').innerText = duplicateCount;
-        document.getElementById('cnt-notfound').innerText = notFoundCount;
-        document.getElementById('cnt-missing-excel').innerText = missingExcelCount;
-        document.getElementById('cnt-missing-pdf').innerText = missingPdfCount;
-
-        if (finalComparisonData.length > 0) {
-            document.getElementById('export-btn').disabled = false;
-            document.getElementById('status-msg').innerText = `Comparison complete.`;
-        }
-
-        renderTable();
-    }
-
-    function setFilter(filterType, btnElem) {
-        currentFilter = filterType;
-        document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-        if (btnElem) btnElem.classList.add('active');
-        renderTable();
-    }
-
-    function renderTable() {
-        const tableBody = document.getElementById('table-body');
-        
-        let filtered = finalComparisonData.filter(row => {
-            if (currentFilter === 'ALL') return true;
-            if (currentFilter === 'DUPLICATE') return row.statuses.includes('DUPLICATE_PDF') || row.statuses.includes('DUPLICATE_EXCEL');
-            if (currentFilter === 'NOT_FOUND') return row.statuses.includes('NOT_FOUND');
-            if (currentFilter === 'MISSING_IN_EXCEL') return row.statuses.includes('MISSING_IN_EXCEL');
-            if (currentFilter === 'MISSING_IN_PDF') return row.statuses.includes('MISSING_IN_PDF');
-            return true;
-        });
-
-        if (filtered.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#888;">No records match the selected filter.</td></tr>';
+      // IndexedDB Helper Functions
+      function openDatabase() {
+        return new Promise((resolve, reject) => {
+          if (!window.indexedDB) {
+            reject(new Error('IndexedDB not supported'));
             return;
-        }
-
-        const displayLimit = 300;
-        const displayData = filtered.slice(0, displayLimit);
-        let htmlStr = '';
-
-        for (let row of displayData) {
-            let badgesHtml = row.statuses.map(st => {
-                if (st === 'DUPLICATE_PDF') return '<span class="badge badge-duplicate">Duplicate in PDF</span>';
-                if (st === 'DUPLICATE_EXCEL') return '<span class="badge badge-duplicate">Duplicate in Excel</span>';
-                if (st === 'NOT_FOUND') return '<span class="badge badge-notfound">Not Found in PDF</span>';
-                if (st === 'MISSING_IN_EXCEL') return '<span class="badge badge-missing-excel">Missing in System Excel</span>';
-                if (st === 'MISSING_IN_PDF') return '<span class="badge badge-missing-pdf">Missing in PDF</span>';
-                if (st === 'MATCHED') return '<span class="badge badge-match">Matched</span>';
-                return '';
-            }).join(' ');
-
-            htmlStr += `<tr>
-                <td>${row.source}</td>
-                <td><strong>${row.itemCode}</strong></td>
-                <td>${row.itemName || '-'}</td>
-                <td>${row.itemType || '-'}</td>
-                <td>${badgesHtml}</td>
-            </tr>`;
-        }
-
-        if (filtered.length > displayLimit) {
-            htmlStr += `<tr><td colspan="5" style="text-align:center; color:#e67e22;"><em>+ ${filtered.length - displayLimit} more rows hidden from preview (all will be exported to Excel).</em></td></tr>`;
-        }
-
-        tableBody.innerHTML = htmlStr;
-    }
-
-    function exportToExcel() {
-        if (!finalComparisonData.length) return;
-
-        const excelRows = finalComparisonData.map(item => ({
-            "Source / File Name": item.source,
-            "Item Code": item.itemCode,
-            "Item Name": item.itemName || '-',
-            "Item Type": item.itemType || '-',
-            "Findings / Status": item.statuses.map(st => {
-                if (st === 'DUPLICATE_PDF') return 'Duplicate in PDF';
-                if (st === 'DUPLICATE_EXCEL') return 'Duplicate in System Excel';
-                if (st === 'NOT_FOUND') return 'Not Found in PDF';
-                if (st === 'MISSING_IN_EXCEL') return 'Missing in System Excel';
-                if (st === 'MISSING_IN_PDF') return 'Missing in PDF';
-                if (st === 'MATCHED') return 'Matched';
-                return st;
-            }).join(' | ')
-        }));
-
-        const worksheet = XLSX.utils.json_to_sheet(excelRows);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Item Code Discrepancies");
-
-        XLSX.writeFile(workbook, "Item_Code_Comparison_Report.xlsx");
-    }
-</script>
-
-</body>
-</html>
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>PDF & System Item Code Comparator</title>
-    <!-- PDF.js Library (JavaScript) for reading PDFs in browser -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
-    <!-- SheetJS (JavaScript) Library for parsing & exporting Excel in browser -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            margin: 30px;
-            background-color: #f4f6f9;
-            color: #333;
-        }
-        .container {
-            max-width: 1000px;
-            margin: 0 auto;
-            background: #ffffff;
-            padding: 25px;
-            border-radius: 8px;
-            box-shadow: 0 4px 10px rgba(0,0,0,0.1);
-        }
-        h2 {
-            margin-top: 0;
-            color: #2c3e50;
-        }
-        .grid-uploads {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 15px;
-            margin-bottom: 20px;
-        }
-        .upload-section {
-            border: 2px dashed #3498db;
-            padding: 20px;
-            text-align: center;
-            border-radius: 6px;
-            background: #ebf5fb;
-            transition: background 0.3s;
-            cursor: pointer;
-        }
-        .upload-section.dragover {
-            background-color: #d4e6f1;
-        }
-        .upload-section.excel-section {
-            border-color: #27ae60;
-            background: #eafaf1;
-        }
-        .upload-section.excel-section.dragover {
-            background-color: #d5f5e3;
-        }
-        input[type="file"] {
-            display: none;
-        }
-        .custom-file-upload {
-            display: inline-block;
-            padding: 10px 16px;
-            cursor: pointer;
-            background-color: #3498db;
-            color: white;
-            border-radius: 4px;
-            font-weight: bold;
-            transition: background 0.3s;
-            font-size: 13px;
-        }
-        .custom-file-upload:hover {
-            background-color: #2980b9;
-        }
-        .custom-file-upload.excel-btn {
-            background-color: #27ae60;
-        }
-        .custom-file-upload.excel-btn:hover {
-            background-color: #1e8449;
-        }
-        .summary-cards {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(130px, 1fr));
-            gap: 10px;
-            margin-bottom: 20px;
-        }
-        .card {
-            background: #f8f9fa;
-            border: 1px solid #e9ecef;
-            border-radius: 6px;
-            padding: 12px;
-            text-align: center;
-        }
-        .card-num {
-            font-size: 20px;
-            font-weight: bold;
-            color: #2c3e50;
-        }
-        .card-label {
-            font-size: 12px;
-            color: #6c757d;
-            margin-top: 4px;
-        }
-        .filter-bar {
-            display: flex;
-            gap: 8px;
-            margin-bottom: 15px;
-            flex-wrap: wrap;
-        }
-        .filter-btn {
-            padding: 6px 14px;
-            background: #e0e0e0;
-            color: #333;
-            border: none;
-            border-radius: 20px;
-            font-size: 13px;
-            font-weight: bold;
-            cursor: pointer;
-        }
-        .filter-btn.active {
-            background: #3498db;
-            color: #fff;
-        }
-        .actions {
-            margin-bottom: 20px;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-        }
-        button.action-btn {
-            padding: 10px 18px;
-            background-color: #2ecc71;
-            color: white;
-            border: none;
-            border-radius: 4px;
-            font-size: 14px;
-            font-weight: bold;
-            cursor: pointer;
-            transition: background 0.3s;
-        }
-        button.action-btn:hover {
-            background-color: #27ae60;
-        }
-        button.action-btn:disabled {
-            background-color: #bdc3c7;
-            cursor: not-allowed;
-        }
-        .progress-bar-container {
-            width: 100%;
-            background-color: #e0e0e0;
-            border-radius: 4px;
-            margin-bottom: 15px;
-            display: none;
-        }
-        .progress-bar {
-            width: 0%;
-            height: 12px;
-            background-color: #2ecc71;
-            border-radius: 4px;
-            transition: width 0.1s;
-        }
-        table {
-            width: 100%;
-            border-collapse: collapse;
-            margin-top: 10px;
-        }
-        th, td {
-            border: 1px solid #ddd;
-            padding: 9px;
-            text-align: left;
-            font-size: 13px;
-        }
-        th {
-            background-color: #f2f2f2;
-            color: #2c3e50;
-        }
-        tr:nth-child(even) {
-            background-color: #f9f9f9;
-        }
-        .badge {
-            display: inline-block;
-            padding: 3px 8px;
-            border-radius: 12px;
-            font-size: 11px;
-            font-weight: bold;
-            color: white;
-        }
-        .badge-duplicate { background-color: #e67e22; }
-        .badge-notfound { background-color: #e74c3c; }
-        .badge-missing-excel { background-color: #9b59b6; }
-        .badge-missing-pdf { background-color: #34495e; }
-        .badge-match { background-color: #2ecc71; }
-    </style>
-</head>
-<body>
-
-<div class="container">
-    <h2>PDF & System Item Code Comparator</h2>
-    <p>Upload your PDFs/folders and raw System Excel sheet. Automatically extracts <b>Item Code, Item Name, & Item Type</b> from PDFs and filters Excel by <b>ASSEMBLY / SUB ASSEMBLY</b>.</p>
-
-    <div class="grid-uploads">
-        <!-- PDF Upload Zone -->
-        <div class="upload-section" id="pdf-drop-zone">
-            <label for="pdf-input" class="custom-file-upload">
-                1. Select / Drop PDFs or Folders
-            </label>
-            <input type="file" id="pdf-input" multiple webkitdirectory accept="application/pdf">
-            <p id="pdf-file-count" style="margin-top: 10px; font-size: 12px; color: #555;">No PDFs loaded</p>
-        </div>
-
-        <!-- Excel Upload Zone -->
-        <div class="upload-section excel-section" id="excel-drop-zone">
-            <label for="excel-input" class="custom-file-upload excel-btn">
-                2. Upload System Raw Excel Sheet
-            </label>
-            <input type="file" id="excel-input" accept=".xlsx, .xls, .csv">
-            <p id="excel-file-count" style="margin-top: 10px; font-size: 12px; color: #555;">No Excel loaded</p>
-        </div>
-    </div>
-
-    <div class="progress-bar-container" id="progress-container">
-        <div class="progress-bar" id="progress-bar"></div>
-    </div>
-
-    <!-- Summary Cards -->
-    <div class="summary-cards">
-        <div class="card"><div class="card-num" id="cnt-pdf-total">0</div><div class="card-label">PDFs Processed</div></div>
-        <div class="card"><div class="card-num" id="cnt-excel-total">0</div><div class="card-label">System Excel Codes</div></div>
-        <div class="card"><div class="card-num" id="cnt-duplicates" style="color:#e67e22;">0</div><div class="card-label">Duplicates Found</div></div>
-        <div class="card"><div class="card-num" id="cnt-notfound" style="color:#e74c3c;">0</div><div class="card-label">Not Found in PDF</div></div>
-        <div class="card"><div class="card-num" id="cnt-missing-excel" style="color:#9b59b6;">0</div><div class="card-label">Missing in Excel</div></div>
-        <div class="card"><div class="card-num" id="cnt-missing-pdf" style="color:#34495e;">0</div><div class="card-label">Missing in PDF</div></div>
-    </div>
-
-    <div class="filter-bar">
-        <button class="filter-btn active" onclick="setFilter('ALL', this)">All Results</button>
-        <button class="filter-btn" onclick="setFilter('DUPLICATE', this)">Duplicates</button>
-        <button class="filter-btn" onclick="setFilter('NOT_FOUND', this)">Not Found in PDF</button>
-        <button class="filter-btn" onclick="setFilter('MISSING_IN_EXCEL', this)">Missing in Excel</button>
-        <button class="filter-btn" onclick="setFilter('MISSING_IN_PDF', this)">Missing in PDF</button>
-    </div>
-
-    <div class="actions">
-        <span id="status-msg" style="font-size: 13px; color: #555;">Upload PDFs and System Excel sheet to analyze.</span>
-        <button id="export-btn" class="action-btn" onclick="exportToExcel()" disabled>Export Comparison Report</button>
-    </div>
-
-    <table id="result-table">
-        <thead>
-            <tr>
-                <th>Source / File Name</th>
-                <th>Item Code</th>
-                <th>Item Name</th>
-                <th>Item Type</th>
-                <th>Status / Findings</th>
-            </tr>
-        </thead>
-        <tbody id="table-body">
-            <tr>
-                <td colspan="5" style="text-align: center; color: #888;">Upload files above to run extraction and matching.</td>
-            </tr>
-        </tbody>
-    </table>
-</div>
-
-<script>
-    // Initialize PDF.js worker
-    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
-
-    let pdfExtractedData = [];
-    let systemExcelCodes = [];
-    let finalComparisonData = [];
-    let currentFilter = 'ALL';
-
-    const pdfDropZone = document.getElementById('pdf-drop-zone');
-    const excelDropZone = document.getElementById('excel-drop-zone');
-
-    // Drag-and-drop event listeners for PDFs
-    pdfDropZone.addEventListener('dragover', (e) => { e.preventDefault(); pdfDropZone.classList.add('dragover'); });
-    pdfDropZone.addEventListener('dragleave', () => pdfDropZone.classList.remove('dragover'));
-    pdfDropZone.addEventListener('drop', async (e) => {
-        e.preventDefault();
-        pdfDropZone.classList.remove('dragover');
-        const items = e.dataTransfer.items;
-        if (!items) return;
-
-        let pdfFiles = [];
-        for (let i = 0; i < items.length; i++) {
-            const entry = items[i].webkitGetAsEntry ? items[i].webkitGetAsEntry() : null;
-            if (entry) await scanFiles(entry, pdfFiles);
-        }
-        if (pdfFiles.length > 0) processPDFFiles(pdfFiles);
-    });
-
-    document.getElementById('pdf-input').addEventListener('change', function(e) {
-        const files = Array.from(e.target.files).filter(f => f.name.toLowerCase().endsWith('.pdf'));
-        if (files.length > 0) processPDFFiles(files);
-    });
-
-    // Drag-and-drop event listeners for Excel
-    excelDropZone.addEventListener('dragover', (e) => { e.preventDefault(); excelDropZone.classList.add('dragover'); });
-    excelDropZone.addEventListener('dragleave', () => excelDropZone.classList.remove('dragover'));
-    excelDropZone.addEventListener('drop', (e) => {
-        e.preventDefault();
-        excelDropZone.classList.remove('dragover');
-        if (e.dataTransfer.files.length > 0) processExcelFile(e.dataTransfer.files[0]);
-    });
-
-    document.getElementById('excel-input').addEventListener('change', function(e) {
-        if (e.target.files.length > 0) processExcelFile(e.target.files[0]);
-    });
-
-    async function scanFiles(entry, pdfFiles) {
-        if (entry.isFile) {
-            if (entry.name.toLowerCase().endsWith('.pdf')) {
-                pdfFiles.push(await new Promise((r) => entry.file(r)));
+          }
+          const req = indexedDB.open(IDB_NAME, 1);
+          req.onupgradeneeded = (e) => {
+            const db = e.target.result;
+            if (!db.objectStoreNames.contains(IDB_STORE)) {
+              db.createObjectStore(IDB_STORE);
             }
-        } else if (entry.isDirectory) {
-            const dirReader = entry.createReader();
-            const entries = await new Promise((r) => dirReader.readEntries(r));
-            for (let child of entries) {
-                await scanFiles(child, pdfFiles);
-            }
-        }
-    }
+          };
+          req.onsuccess = () => resolve(req.result);
+          req.onerror = () => reject(req.error);
+        });
+      }
 
-    async function processPDFFiles(files) {
-        const startTime = performance.now();
-        const progressContainer = document.getElementById('progress-container');
-        const progressBar = document.getElementById('progress-bar');
-        const pdfFileCountText = document.getElementById('pdf-file-count');
-
-        progressContainer.style.display = 'block';
-        progressBar.style.width = '0%';
-        pdfFileCountText.innerText = `Processing ${files.length} PDFs...`;
-        
-        pdfExtractedData = [];
-        const CHUNK_SIZE = 20;
-        let completed = 0;
-
-        for (let i = 0; i < files.length; i += CHUNK_SIZE) {
-            const chunk = files.slice(i, i + CHUNK_SIZE);
-            const chunkResults = await Promise.all(chunk.map(file => processSinglePDF(file)));
-            pdfExtractedData.push(...chunkResults);
-            completed += chunk.length;
-            const percent = Math.min(100, Math.round((completed / files.length) * 100));
-            progressBar.style.width = `${percent}%`;
-        }
-
-        const timeTaken = ((performance.now() - startTime) / 1000).toFixed(2);
-        pdfFileCountText.innerText = `Done! Loaded ${files.length} PDFs (${timeTaken}s)`;
-        
-        runComparison();
-    }
-
-    async function processSinglePDF(file) {
+      async function saveToIndexedDB(payload) {
         try {
-            const arrayBuffer = await file.arrayBuffer();
-            const pdfTask = pdfjsLib.getDocument({ data: arrayBuffer, stopAtErrors: true });
-            const pdf = await pdfTask.promise;
-            
-            const page = await pdf.getPage(1);
-            const textContent = await page.getTextContent();
-            
-            let fullText = '';
-            for (let i = 0; i < textContent.items.length; i++) {
-                fullText += textContent.items[i].str + ' ';
-            }
-
-            // Match Item Code
-            const codeMatch = fullText.match(/Item\s*Code\s*:\s*([^\s]+)/i);
-            const itemCode = codeMatch ? codeMatch[1].trim() : 'Not Found';
-
-            // Match Item Name
-            const nameMatch = fullText.match(/Item\s*Name\s*:\s*(.*?)(?=\s*(?:Part\s*Code|Units|Type|Item\s*Type|Material|Gross|BOM|\n|$))/i);
-            const itemName = nameMatch ? nameMatch[1].trim() : 'Not Found';
-
-            // Match Item Type
-            const typeMatch = fullText.match(/Item\s*Type\s*:\s*(.*?)(?=\s*(?:Material|Gross|Net|Cut|Units|BOM|\n|$))/i);
-            const itemType = typeMatch ? typeMatch[1].trim() : 'Not Found';
-
-            pdf.cleanup();
-            pdf.destroy();
-
-            return { fileName: file.name, itemCode: itemCode, itemName: itemName, itemType: itemType };
-        } catch (e) {
-            return { fileName: file.name, itemCode: 'Error', itemName: 'Error', itemType: 'Error' };
+          const db = await openDatabase();
+          return new Promise((resolve, reject) => {
+            const tx = db.transaction(IDB_STORE, 'readwrite');
+            tx.objectStore(IDB_STORE).put(payload, IDB_KEY);
+            tx.oncomplete = () => resolve(true);
+            tx.onerror = () => reject(tx.error);
+          });
+        } catch (err) {
+          console.warn('IndexedDB save warning:', err);
+          return false;
         }
-    }
+      }
 
-    // Process Raw Excel Export & Filter Assembly / Sub Assembly
-    function processExcelFile(file) {
-        const excelFileCountText = document.getElementById('excel-file-count');
-        excelFileCountText.innerText = `Reading ${file.name}...`;
+      async function loadFromIndexedDB() {
+        try {
+          const db = await openDatabase();
+          return new Promise((resolve, reject) => {
+            const tx = db.transaction(IDB_STORE, 'readonly');
+            const req = tx.objectStore(IDB_STORE).get(IDB_KEY);
+            req.onsuccess = () => resolve(req.result || null);
+            req.onerror = () => reject(req.error);
+          });
+        } catch (err) {
+          console.warn('IndexedDB load warning:', err);
+          return null;
+        }
+      }
 
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            try {
-                const data = new Uint8Array(e.target.result);
-                const workbook = XLSX.read(data, { type: 'array' });
-                const firstSheetName = workbook.SheetNames[0];
-                const worksheet = workbook.Sheets[firstSheetName];
-                const json = XLSX.utils.sheet_to_json(worksheet, { defval: '' });
+      async function clearIndexedDB() {
+        try {
+          const db = await openDatabase();
+          return new Promise((resolve) => {
+            const tx = db.transaction(IDB_STORE, 'readwrite');
+            tx.objectStore(IDB_STORE).delete(IDB_KEY);
+            tx.oncomplete = () => resolve(true);
+          });
+        } catch (err) {
+          return false;
+        }
+      }
 
-                systemExcelCodes = [];
-                if (json.length > 0) {
-                    const keys = Object.keys(json[0]);
-                    
-                    // Auto-detect Item Code column name
-                    let codeKey = keys.find(k => {
-                        const clean = k.trim().toUpperCase();
-                        return clean.includes('ITEM CODE') || clean.includes('CODE') || clean.includes('SKU');
-                    }) || keys[0];
+      // Toast helper
+      let toastTimer = null;
+      function showToast(message, type = 'info') {
+        const toast = document.getElementById('toast');
+        const toastMsg = document.getElementById('toastMsg');
+        const toastIcon = document.getElementById('toastIcon');
 
-                    // Auto-detect Item Type column name
-                    let typeKey = keys.find(k => {
-                        const clean = k.trim().toUpperCase();
-                        return clean.includes('ITEM TYPE') || clean.includes('TYPE');
-                    });
+        toast.className = 'no-print fixed bottom-5 right-5 z-50 transform transition-all duration-300 max-w-md rounded-xl shadow-lg border px-4 py-3 text-sm font-medium flex items-center gap-3';
 
-                    json.forEach(row => {
-                        let codeVal = row[codeKey];
-                        
-                        // Condition check: Item Type MUST be "ASSEMBLY" or "SUB ASSEMBLY"
-                        let isValidType = true;
-                        if (typeKey) {
-                            let typeVal = String(row[typeKey] || '').trim().toUpperCase();
-                            isValidType = (typeVal === 'ASSEMBLY' || typeVal === 'SUB ASSEMBLY' || typeVal === 'SUB-ASSEMBLY');
-                        }
+        if (type === 'success') {
+          toast.classList.add('bg-emerald-900', 'text-white', 'border-emerald-700');
+          toastIcon.innerHTML = '✓';
+        } else if (type === 'error') {
+          toast.classList.add('bg-rose-900', 'text-white', 'border-rose-700');
+          toastIcon.innerHTML = '⚠';
+        } else {
+          toast.classList.add('bg-slate-900', 'text-white', 'border-slate-700');
+          toastIcon.innerHTML = 'ℹ';
+        }
 
-                        if (isValidType && codeVal !== undefined && codeVal !== null && String(codeVal).trim() !== '') {
-                            systemExcelCodes.push(String(codeVal).trim());
-                        }
-                    });
-                }
+        toastMsg.textContent = message;
+        toast.classList.remove('hidden');
 
-                excelFileCountText.innerText = `Loaded ${systemExcelCodes.length} codes (Filtered: ASSEMBLY / SUB ASSEMBLY)`;
-                runComparison();
-            } catch (err) {
-                excelFileCountText.innerText = `Error reading Excel file!`;
-                console.error(err);
+        clearTimeout(toastTimer);
+        toastTimer = setTimeout(() => {
+          toast.classList.add('hidden');
+        }, 3800);
+      }
+
+      // Helper: Clean cell strings
+      function cleanCellText(val) {
+        if (val === null || val === undefined) return '';
+        return String(val).replace(/\r?\n|\r/g, ' ').replace(/\s+/g, ' ').trim();
+      }
+
+      // Normalize Item/Product codes for reliable lookup (e.g. "22", " 22 ", "0029725")
+      function normalizeCode(val) {
+        return cleanCellText(val).toUpperCase();
+      }
+
+      // Find column index by matching header names (case-insensitive)
+      function findColIndex(headers, candidates) {
+        const normHeaders = headers.map(h => cleanCellText(h).toLowerCase());
+        for (const cand of candidates) {
+          const idx = normHeaders.indexOf(cand.toLowerCase());
+          if (idx !== -1) return idx;
+        }
+        return -1;
+      }
+
+      // Parse Primary Raw ERP Format (30-column RAW.xlsx Sheet1/Sheet3) OR Flattened Format (Sheet2)
+      async function processSheetRows(rows2D, sourceFileName) {
+        if (!rows2D || rows2D.length < 2) {
+          showToast('The uploaded file appears empty or lacks data rows.', 'error');
+          return;
+        }
+
+        // Locate header row within first 8 rows
+        let headerRowIndex = 0;
+        for (let i = 0; i < Math.min(8, rows2D.length); i++) {
+          const rowStr = (rows2D[i] || []).map(c => cleanCellText(c).toLowerCase()).join('|');
+          if (
+            rowStr.includes('item code') ||
+            rowStr.includes('product code') ||
+            rowStr.includes('internalcode') ||
+            rowStr.includes('assembly')
+          ) {
+            headerRowIndex = i;
+            break;
+          }
+        }
+
+        const headers = rows2D[headerRowIndex] || [];
+        const idxInternalCode = findColIndex(headers, ['InternalCode', 'Internal Code']);
+        const idxItemCode = findColIndex(headers, ['Item code', 'Item Code', 'ItemCode']);
+        const idxItemName = findColIndex(headers, ['Item Name', 'ItemName']);
+        const idxUnits = findColIndex(headers, ['Units', 'Unit']);
+        const idxItemType = findColIndex(headers, ['Item Type', 'ItemType', 'Type']);
+        const idxProductCode = findColIndex(headers, ['Product Code', 'ProductCode']);
+        const idxPName = findColIndex(headers, ['PName', 'Product Name', 'P Name']);
+        const idxPUnits = findColIndex(headers, ['Punits', 'PUnits', 'P Unit']);
+        const idxProductType = findColIndex(headers, ['Product Type', 'ProductType']);
+        const idxMGrade = findColIndex(headers, ['M Grade', 'Material Grade', 'Grade']);
+        const idxMSection = findColIndex(headers, ['M Section', 'Material Section', 'Section']);
+        const idxBomQty = findColIndex(headers, ['BomQty', 'BOM Qty', 'Bom Qty']);
+
+        const isMultiLevelERP = idxItemCode !== -1 && idxProductCode !== -1 && idxProductType !== -1;
+
+        const newParentMap = new Map();
+        let bopLineCounter = 0;
+
+        if (isMultiLevelERP) {
+          // 1. Primary Raw ERP Format (30 columns)
+          let lastParent = null;
+          const useForwardFill = forwardFillToggle.checked;
+
+          for (let r = headerRowIndex + 1; r < rows2D.length; r++) {
+            const row = rows2D[r];
+            if (!row || row.length === 0) continue;
+
+            const rawItemCode = cleanCellText(row[idxItemCode]);
+            const rawInternalCode = idxInternalCode !== -1 ? cleanCellText(row[idxInternalCode]) : '';
+            const rawItemName = idxItemName !== -1 ? cleanCellText(row[idxItemName]) : '';
+            const rawUnits = idxUnits !== -1 ? cleanCellText(row[idxUnits]) : 'NOS';
+            const rawItemType = idxItemType !== -1 ? cleanCellText(row[idxItemType]).toUpperCase() : '';
+
+            let activeParent = null;
+
+            if (rawItemCode) {
+              const normKey = normalizeCode(rawItemCode);
+              if (!newParentMap.has(normKey)) {
+                newParentMap.set(normKey, {
+                  key: normKey,
+                  itemCode: rawItemCode,
+                  internalCode: rawInternalCode || '-',
+                  itemName: rawItemName || rawItemCode,
+                  units: rawUnits || 'NOS',
+                  itemType: rawItemType || 'ASSEMBLY',
+                  children: []
+                });
+              } else {
+                const existing = newParentMap.get(normKey);
+                if ((!existing.internalCode || existing.internalCode === '-') && rawInternalCode) existing.internalCode = rawInternalCode;
+                if (existing.itemName === existing.itemCode && rawItemName) existing.itemName = rawItemName;
+                if (rawItemType) existing.itemType = rawItemType;
+              }
+              activeParent = newParentMap.get(normKey);
+              lastParent = activeParent;
+            } else if (useForwardFill && lastParent) {
+              activeParent = lastParent;
             }
+
+            if (!activeParent) continue;
+
+            const prodCode = cleanCellText(row[idxProductCode]);
+            const pName = idxPName !== -1 ? cleanCellText(row[idxPName]) : '';
+            const pUnits = idxPUnits !== -1 ? cleanCellText(row[idxPUnits]) : 'NOS';
+            const prodType = idxProductType !== -1 ? cleanCellText(row[idxProductType]).toUpperCase() : '';
+            const mGrade = idxMGrade !== -1 ? cleanCellText(row[idxMGrade]) : '';
+            const mSection = idxMSection !== -1 ? cleanCellText(row[idxMSection]) : '';
+            const rawQty = idxBomQty !== -1 ? row[idxBomQty] : 1;
+            const parsedQty = parseFloat(rawQty);
+            const bomQty = isNaN(parsedQty) ? 1 : parsedQty;
+
+            if (prodCode || pName) {
+              if (prodType === 'BOP') bopLineCounter++;
+              activeParent.children.push({
+                productCode: prodCode || '-',
+                productKey: normalizeCode(prodCode),
+                pName: pName || prodCode,
+                pUnits: pUnits || 'NOS',
+                productType: prodType,
+                mGrade: mGrade || '—',
+                mSection: mSection || '—',
+                bomQty: bomQty
+              });
+            }
+          }
+        } else {
+          // 2. Fallback Flattened BOM Format (Sheet2 style: ASSEMBLY | 1 | 2 | Type | BOM Qty | Material Grade | Material Section)
+          let lastAsm = '';
+          const useForwardFill = forwardFillToggle.checked;
+
+          for (let r = headerRowIndex + 1; r < rows2D.length; r++) {
+            const row = rows2D[r];
+            if (!row || row.length === 0) continue;
+
+            let colA = cleanCellText(row[0]);
+            const colB = cleanCellText(row[1]);
+            const colC = cleanCellText(row[2]);
+            const colD = cleanCellText(row[3]).toUpperCase();
+            const colE = parseFloat(row[4]);
+            const colF = cleanCellText(row[5]);
+            const colG = cleanCellText(row[6]);
+
+            if (colA) {
+              lastAsm = colA;
+            } else if (useForwardFill && lastAsm) {
+              colA = lastAsm;
+            }
+
+            const rawComp = colB && colC ? `${colB} - ${colC}` : (colB || colC);
+            if (!colA || !rawComp) continue;
+
+            const normKey = normalizeCode(colA);
+            if (!newParentMap.has(normKey)) {
+              const codeMatch = colA.match(/^([A-Z0-9-]+)/i);
+              newParentMap.set(normKey, {
+                key: normKey,
+                itemCode: codeMatch ? codeMatch[1] : colA,
+                internalCode: codeMatch ? codeMatch[1] : '-',
+                itemName: colA,
+                units: 'NOS',
+                itemType: 'ASSEMBLY',
+                children: []
+              });
+            }
+
+            const trailingCode = rawComp.match(/^(.*?)\s*\(([^()]+)\)\s*$/);
+            const pName = trailingCode ? trailingCode[1].trim() : rawComp;
+            const pCode = trailingCode ? trailingCode[2].trim() : '-';
+
+            if (colD === 'BOP') bopLineCounter++;
+            newParentMap.get(normKey).children.push({
+              productCode: pCode,
+              productKey: normalizeCode(pCode),
+              pName: pName,
+              pUnits: 'NOS',
+              productType: colD || 'BOP',
+              mGrade: colG || colF || '—',
+              mSection: colF && colG ? colF : '—',
+              bomQty: isNaN(colE) ? 1 : colE
+            });
+          }
+        }
+
+        if (newParentMap.size === 0) {
+          showToast('No valid Assembly or BOM records found in the uploaded file.', 'error');
+          return;
+        }
+
+        parentMap = newParentMap;
+        rawBopLineCount = bopLineCounter;
+        rebuildSearchIndex();
+
+        const assemblyCount = searchableParents.filter(p => p.itemType === 'ASSEMBLY').length;
+        const meta = {
+          fileName: sourceFileName,
+          uploadedAt: new Date().toLocaleString(),
+          assemblyCount: assemblyCount || searchableParents.length,
+          totalParents: searchableParents.length,
+          bopLines: rawBopLineCount
         };
+
+        // Persist in IndexedDB for instant reload on future visits
+        const serializedParents = Array.from(parentMap.entries());
+        await saveToIndexedDB({ parents: serializedParents, meta });
+
+        updateDatabaseUI(meta);
+        showToast(`Database Saved: ${meta.assemblyCount.toLocaleString()} Assemblies & ${meta.bopLines.toLocaleString()} BOP lines!`, 'success');
+
+        // Auto-select first ASSEMBLY if available
+        const firstAsm = searchableParents.find(p => p.itemType === 'ASSEMBLY') || searchableParents[0];
+        if (firstAsm) {
+          selectParentItem(firstAsm);
+        }
+      }
+
+      // Build searchable list of parents
+      function rebuildSearchIndex() {
+        searchableParents = Array.from(parentMap.values());
+      }
+
+      // Recursive Multi-Level BOM Explosion to extract all BOP items
+      function explodeBopItems(rootParent) {
+        const collected = [];
+
+        function traverse(currentNode, multiplier, sourceLabel, visitedSet, depth) {
+          if (!currentNode || depth > 10) return;
+
+          for (const child of currentNode.children) {
+            const effectiveQty = (parseFloat(child.bomQty) || 0) * multiplier;
+            const pType = (child.productType || '').toUpperCase().trim();
+
+            if (pType === 'BOP') {
+              collected.push({
+                bopCode: child.productCode,
+                bopName: child.pName,
+                mGrade: child.mGrade || '—',
+                mSection: child.mSection || '—',
+                bomQty: effectiveQty,
+                unit: child.pUnits || 'NOS',
+                source: sourceLabel
+              });
+            } else if (pType === 'SUB ASSEMBLY' || pType === 'SUB-ASSEMBLY' || pType === 'SUBASSEMBLY') {
+              const subKey = child.productKey;
+              if (subKey && !visitedSet.has(subKey) && parentMap.has(subKey)) {
+                const nextVisited = new Set(visitedSet);
+                nextVisited.add(subKey);
+                const subNode = parentMap.get(subKey);
+                const nextSource = `Via Sub-Assembly: ${subNode.itemName} (${subNode.itemCode})`;
+                traverse(subNode, effectiveQty, nextSource, nextVisited, depth + 1);
+              }
+            }
+          }
+        }
+
+        const initialVisited = new Set([rootParent.key]);
+        traverse(rootParent, 1, 'Direct Assembly', initialVisited, 0);
+        return collected;
+      }
+
+      // Update Top Status Bar & Quick-Pick Chips
+      function updateDatabaseUI(meta) {
+        if (!parentMap.size) {
+          dbDot.className = 'w-2.5 h-2.5 rounded-full bg-amber-400';
+          dbStatusText.textContent = 'No ERP Database Loaded';
+          clearDbBtn.classList.add('hidden');
+          quickChipsContainer.classList.add('hidden');
+          return;
+        }
+
+        dbDot.className = 'w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse';
+        dbStatusText.innerHTML = `Database Loaded: <span class="text-white font-semibold">${escapeHtml(meta.fileName)}</span> &bull; ${meta.assemblyCount.toLocaleString()} Assemblies &bull; ${meta.bopLines.toLocaleString()} BOP Lines`;
+        clearDbBtn.classList.remove('hidden');
+
+        // Render quick-pick chips prioritizing ASSEMBLY items
+        quickChipsList.innerHTML = '';
+        const assemblies = searchableParents.filter(p => p.itemType === 'ASSEMBLY');
+        const chipPool = (assemblies.length ? assemblies : searchableParents).slice(0, 6);
+
+        chipPool.forEach(item => {
+          const btn = document.createElement('button');
+          btn.type = 'button';
+          btn.className = 'px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-blue-50 text-slate-700 hover:text-blue-700 border border-slate-200 hover:border-blue-300 font-medium transition truncate max-w-xs';
+          btn.textContent = `${item.itemName} [${item.itemCode}]`;
+          btn.addEventListener('click', () => selectParentItem(item));
+          quickChipsList.appendChild(btn);
+        });
+        quickChipsContainer.classList.remove('hidden');
+      }
+
+      // Handle File Upload via Input or Drag & Drop
+      function handleFileUpload(file) {
+        if (!file) return;
+        if (typeof XLSX === 'undefined') {
+          showToast('Excel parser library (SheetJS) failed to load. Please check your internet connection.', 'error');
+          return;
+        }
+        const reader = new FileReader();
+        showToast(`Reading ${file.name}...`, 'info');
+
+        reader.onload = function (e) {
+          try {
+            const data = new Uint8Array(e.target.result);
+            const workbook = XLSX.read(data, { type: 'array' });
+            const firstSheetName = workbook.SheetNames[0];
+            const worksheet = workbook.Sheets[firstSheetName];
+            const rows2D = XLSX.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
+            processSheetRows(rows2D, file.name);
+          } catch (error) {
+            console.error(error);
+            showToast('Failed to parse Excel file. Ensure it is a valid .xlsx, .xls, or .csv file.', 'error');
+          }
+        };
+
         reader.readAsArrayBuffer(file);
-    }
+      }
 
-    // Comparison logic
-    function runComparison() {
-        finalComparisonData = [];
+      // Select a Parent Item (Assembly / Sub-Assembly) & Render its BOP Table
+      function selectParentItem(parentObj) {
+        selectedParent = parentObj;
+        assemblySearchInput.value = `${parentObj.itemName} (Code: ${parentObj.itemCode})`;
+        clearSearchBtn.classList.remove('hidden');
+        suggestionsBox.classList.add('hidden');
+        innerFilterInput.value = '';
 
-        const pdfCodeCounts = {};
-        pdfExtractedData.forEach(item => {
-            if (item.itemCode !== 'Not Found' && item.itemCode !== 'Error') {
-                pdfCodeCounts[item.itemCode] = (pdfCodeCounts[item.itemCode] || 0) + 1;
-            }
-        });
+        renderBopTable();
+      }
 
-        const excelCodeCounts = {};
-        systemExcelCodes.forEach(code => {
-            excelCodeCounts[code] = (excelCodeCounts[code] || 0) + 1;
-        });
+      // Render Exploded BOP Table for Selected Assembly
+      function renderBopTable() {
+        if (!selectedParent) return;
 
-        const excelCodeSet = new Set(systemExcelCodes);
-        const pdfFoundCodesSet = new Set();
+        const innerQuery = cleanCellText(innerFilterInput.value).toLowerCase();
+        const consolidate = consolidateDupesToggle.checked;
 
-        pdfExtractedData.forEach(pdfItem => {
-            const code = pdfItem.itemCode;
-            const name = pdfItem.itemName;
-            const type = pdfItem.itemType;
-            let statuses = [];
+        let exploded = explodeBopItems(selectedParent);
 
-            if (code === 'Not Found' || code === 'Error') {
-                statuses.push('NOT_FOUND');
+        // Apply inner table search filter
+        if (innerQuery) {
+          exploded = exploded.filter(row => {
+            const haystack = `${row.bopCode} ${row.bopName} ${row.mGrade} ${row.mSection} ${row.source}`.toLowerCase();
+            return haystack.includes(innerQuery);
+          });
+        }
+
+        // Consolidate identical BOP codes if toggled ON
+        if (consolidate && exploded.length > 0) {
+          const map = new Map();
+          exploded.forEach(item => {
+            const key = `${normalizeCode(item.bopCode)}||${normalizeCode(item.bopName)}||${item.mGrade}||${item.mSection}`;
+            if (!map.has(key)) {
+              map.set(key, {
+                ...item,
+                sources: new Set([item.source])
+              });
             } else {
-                pdfFoundCodesSet.add(code);
-                if (pdfCodeCounts[code] > 1) {
-                    statuses.push('DUPLICATE_PDF');
-                }
-                if (systemExcelCodes.length > 0 && !excelCodeSet.has(code)) {
-                    statuses.push('MISSING_IN_EXCEL');
-                }
+              const existing = map.get(key);
+              existing.bomQty = (parseFloat(existing.bomQty) || 0) + (parseFloat(item.bomQty) || 0);
+              existing.sources.add(item.source);
             }
+          });
+          exploded = Array.from(map.values()).map(entry => ({
+            ...entry,
+            source: Array.from(entry.sources).join(' + ')
+          }));
+        }
 
-            if (statuses.length === 0) statuses.push('MATCHED');
+        currentDisplayedRows = exploded;
 
-            finalComparisonData.push({
-                source: pdfItem.fileName,
-                itemCode: code,
-                itemName: name,
-                itemType: type,
-                statuses: statuses
-            });
+        // Update Summary Header Card
+        assemblyTypeBadge.textContent = selectedParent.itemType || 'ASSEMBLY';
+        assemblyCodeBadge.textContent = `ITEM CODE: ${selectedParent.itemCode}`;
+        internalCodeBadge.textContent = `INTERNAL CODE: ${selectedParent.internalCode}`;
+        selectedAssemblyTitle.textContent = selectedParent.itemName;
+        selectedUnitsText.textContent = selectedParent.units || 'NOS';
+        totalItemsCount.textContent = exploded.length;
+
+        const sumQty = exploded.reduce((acc, r) => acc + (parseFloat(r.bomQty) || 0), 0);
+        totalBomQtyCount.textContent = Number.isInteger(sumQty) ? sumQty : sumQty.toFixed(2);
+
+        // Render Table Rows
+        bopTableBody.innerHTML = '';
+
+        if (exploded.length === 0) {
+          bopTableBody.innerHTML = `
+            <tr>
+              <td colspan="8" class="py-8 px-4 text-center text-slate-500 text-sm">
+                No BOP (Bought Out Part) items found for <strong>${escapeHtml(selectedParent.itemName)}</strong>${innerQuery ? ' matching your filter' : ''}.
+              </td>
+            </tr>
+          `;
+        } else {
+          exploded.forEach((item, index) => {
+            const tr = document.createElement('tr');
+            tr.className = index % 2 === 0 ? 'bg-white hover:bg-blue-50/40' : 'bg-slate-50/60 hover:bg-blue-50/40';
+
+            const gradeDisplay = item.mGrade && item.mGrade !== '—'
+              ? `<span class="inline-block font-semibold text-slate-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded text-xs print:border-none print:bg-transparent print:p-0">${escapeHtml(item.mGrade)}</span>`
+              : `<span class="text-slate-400 print:text-black">—</span>`;
+
+            const isDirect = item.source === 'Direct Assembly';
+            const sourceBadge = isDirect
+              ? `<span class="inline-block text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded print:border-none print:bg-transparent print:text-black print:p-0">Direct Assembly</span>`
+              : `<span class="inline-block text-xs font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded print:border-none print:bg-transparent print:text-black print:p-0">${escapeHtml(item.source)}</span>`;
+
+            const qtyFormatted = Number.isInteger(item.bomQty) ? item.bomQty : Number(item.bomQty).toFixed(2);
+
+            tr.innerHTML = `
+              <td class="py-2.5 px-3 text-center font-medium text-slate-500 print:text-black">${index + 1}</td>
+              <td class="py-2.5 px-3 font-mono-code text-xs font-bold text-blue-700 print:text-black">${escapeHtml(item.bopCode)}</td>
+              <td class="py-2.5 px-3 font-semibold text-slate-900 print:text-black">${escapeHtml(item.bopName)}</td>
+              <td class="py-2.5 px-3 text-xs">${gradeDisplay}</td>
+              <td class="py-2.5 px-3 text-slate-700 text-xs print:text-black">${escapeHtml(item.mSection)}</td>
+              <td class="py-2.5 px-3 text-center font-bold text-slate-900 print:text-black">${escapeHtml(String(qtyFormatted))}</td>
+              <td class="py-2.5 px-3 text-center text-xs font-medium text-slate-600 print:text-black">${escapeHtml(item.unit)}</td>
+              <td class="py-2.5 px-3 text-xs">${sourceBadge}</td>
+            `;
+            bopTableBody.appendChild(tr);
+          });
+        }
+
+        emptyStateSection.classList.add('hidden');
+        resultsSection.classList.remove('hidden');
+      }
+
+      // Escape HTML
+      function escapeHtml(str) {
+        return String(str)
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;');
+      }
+
+      // Autocomplete Search matching Item code, InternalCode, or Item Name
+      function updateSearchSuggestions() {
+        const query = cleanCellText(assemblySearchInput.value).toLowerCase();
+        clearSearchBtn.classList.toggle('hidden', query.length === 0);
+
+        if (!searchableParents.length) {
+          suggestionsBox.classList.add('hidden');
+          return;
+        }
+
+        const pool = parentTypeFilter === 'ASSEMBLY'
+          ? searchableParents.filter(p => p.itemType === 'ASSEMBLY')
+          : searchableParents;
+
+        const matches = query
+          ? pool.filter(p => {
+              return (
+                p.itemCode.toLowerCase().includes(query) ||
+                p.internalCode.toLowerCase().includes(query) ||
+                p.itemName.toLowerCase().includes(query)
+              );
+            }).slice(0, 30)
+          : pool.slice(0, 20);
+
+        if (matches.length === 0) {
+          suggestionsBox.innerHTML = `
+            <div class="px-4 py-3 text-sm text-slate-500">
+              No matching Assembly found for "<strong>${escapeHtml(assemblySearchInput.value)}</strong>"
+            </div>
+          `;
+          suggestionsBox.classList.remove('hidden');
+          return;
+        }
+
+        suggestionsBox.innerHTML = '';
+        matches.forEach(item => {
+          const bopCount = explodeBopItems(item).length;
+          const div = document.createElement('button');
+          div.type = 'button';
+          div.className = 'w-full text-left px-4 py-2.5 hover:bg-blue-50 flex items-center justify-between gap-3 transition';
+          div.innerHTML = `
+            <div class="min-w-0">
+              <div class="font-semibold text-sm text-slate-800 truncate">${escapeHtml(item.itemName)}</div>
+              <div class="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
+                <span class="font-mono-code font-semibold text-blue-700">Code: ${escapeHtml(item.itemCode)}</span>
+                <span>&bull;</span>
+                <span class="font-mono-code">Internal: ${escapeHtml(item.internalCode)}</span>
+                <span>&bull;</span>
+                <span class="uppercase text-[11px] font-bold text-slate-600">${escapeHtml(item.itemType)}</span>
+              </div>
+            </div>
+            <span class="text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-md shrink-0">
+              ${bopCount} BOP Items
+            </span>
+          `;
+          div.addEventListener('click', () => selectParentItem(item));
+          suggestionsBox.appendChild(div);
         });
 
-        if (systemExcelCodes.length > 0) {
-            systemExcelCodes.forEach(code => {
-                let statuses = [];
-                if (excelCodeCounts[code] > 1) {
-                    statuses.push('DUPLICATE_EXCEL');
-                }
-                if (!pdfFoundCodesSet.has(code)) {
-                    statuses.push('MISSING_IN_PDF');
-                    finalComparisonData.push({
-                        source: 'System Excel Export',
-                        itemCode: code,
-                        itemName: '-',
-                        itemType: '-',
-                        statuses: statuses
-                    });
-                }
-            });
-        }
+        suggestionsBox.classList.remove('hidden');
+      }
 
-        // Numerical & alphabetical sorting
-        finalComparisonData.sort((a, b) => {
-            const numA = parseInt(a.itemCode, 10);
-            const numB = parseInt(b.itemCode, 10);
-            if (!isNaN(numA) && !isNaN(numB)) return numA - numB;
-            return a.itemCode.localeCompare(b.itemCode, undefined, { numeric: true, sensitivity: 'base' });
+      // Event Listeners
+      excelFileInput.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files[0]) {
+          handleFileUpload(e.target.files[0]);
+        }
+      });
+
+      ['dragenter', 'dragover'].forEach(evtName => {
+        dropZone.addEventListener(evtName, (e) => {
+          e.preventDefault();
+          dropZone.classList.add('border-blue-500', 'bg-blue-50');
+        });
+      });
+
+      ['dragleave', 'drop'].forEach(evtName => {
+        dropZone.addEventListener(evtName, (e) => {
+          e.preventDefault();
+          dropZone.classList.remove('border-blue-500', 'bg-blue-50');
+        });
+      });
+
+      dropZone.addEventListener('drop', (e) => {
+        if (e.dataTransfer.files && e.dataTransfer.files[0]) {
+          handleFileUpload(e.dataTransfer.files[0]);
+        }
+      });
+
+      toggleUploadBtn.addEventListener('click', () => {
+        uploadSection.classList.toggle('hidden');
+      });
+
+      // Sample Data matching exact RAW.xlsx structure (Assembly 22 -> Sub-Assemblies 44 & 48 -> 6 BOP items)
+      loadSampleBtn.addEventListener('click', () => {
+        const sampleRows = [
+          ['InternalCode', 'Item code', 'Item Name', 'item group', 'Units', 'Type', 'Item Type', 'Product Code', 'PName', 'Punits', 'Product Type', 'M Grade', 'M Section', 'BomQty'],
+          ['29725', '22', '0029725 JEEP FRONT', 'LEAF SPRING', 'NOS', 'FG', 'ASSEMBLY', '37', 'CENTER BOLT M10 X 1.5P X 53 MM', 'NOS', 'BOP', 'GRADE 8.8', '', 1],
+          ['29725', '22', '0029725 JEEP FRONT', 'LEAF SPRING', 'NOS', 'FG', 'ASSEMBLY', '38', 'CENTER BOLT NUT M10 X 1.5P', 'NOS', 'BOP', 'CLASS 8', '', 1],
+          ['29725', '22', '0029725 JEEP FRONT', 'LEAF SPRING', 'NOS', 'FG', 'ASSEMBLY', '44', 'MAIN LEAF JEEP FRONT', 'NOS', 'SUB ASSEMBLY', '', '60 X 7', 1],
+          ['29725', '22', '0029725 JEEP FRONT', 'LEAF SPRING', 'NOS', 'FG', 'ASSEMBLY', '48', '5TH LEAF JEEP FRONT', 'NOS', 'SUB ASSEMBLY', '', '60 X 7', 1],
+          ['', '44', 'MAIN LEAF JEEP FRONT', 'LEAF', 'NOS', 'SFG', 'SUB ASSEMBLY', '353', 'SINTERTED BUSH Ø28.63 X Ø22.30 X 62.18', 'NOS', 'BOP', '', '', 1],
+          ['', '44', 'MAIN LEAF JEEP FRONT', 'LEAF', 'NOS', 'SFG', 'SUB ASSEMBLY', '354', 'SILENT BLOCK BUSH Ø16 X Ø35 X 69.5 MM', 'NOS', 'BOP', '', '', 1],
+          ['', '48', '5TH LEAF JEEP FRONT', 'LEAF', 'NOS', 'SFG', 'SUB ASSEMBLY', '41', 'CLAMP 25 X 4 X 172 MM', 'NOS', 'BOP', '', '', 1],
+          ['', '48', '5TH LEAF JEEP FRONT', 'LEAF', 'NOS', 'SFG', 'SUB ASSEMBLY', '42', 'RIVET Ø10 X 12 MM', 'NOS', 'BOP', '', '', 1]
+        ];
+        processSheetRows(sampleRows, 'RAW_Sample_ERP.xlsx');
+      });
+
+      // Clear Saved Database
+      clearDbBtn.addEventListener('click', async () => {
+        await clearIndexedDB();
+        parentMap.clear();
+        searchableParents = [];
+        selectedParent = null;
+        assemblySearchInput.value = '';
+        resultsSection.classList.add('hidden');
+        emptyStateSection.classList.remove('hidden');
+        updateDatabaseUI(null);
+        showToast('Saved ERP database cleared.', 'info');
+      });
+
+      // Search Input Events
+      assemblySearchInput.addEventListener('input', updateSearchSuggestions);
+      assemblySearchInput.addEventListener('focus', updateSearchSuggestions);
+
+      function executeDirectSearch() {
+        const q = cleanCellText(assemblySearchInput.value).toLowerCase();
+        if (!searchableParents.length) {
+          showToast('Please upload your ERP Excel database first.', 'error');
+          return;
+        }
+        if (!q) {
+          updateSearchSuggestions();
+          return;
+        }
+        const exactCode = searchableParents.find(p => p.itemCode.toLowerCase() === q || p.internalCode.toLowerCase() === q);
+        const partial = searchableParents.find(p =>
+          p.itemCode.toLowerCase().includes(queryWithoutLabel(q)) ||
+          p.internalCode.toLowerCase().includes(queryWithoutLabel(q)) ||
+          p.itemName.toLowerCase().includes(queryWithoutLabel(q))
+        );
+        const match = exactCode || partial;
+        if (match) {
+          selectParentItem(match);
+        } else {
+          showToast('No Assembly or Sub-Assembly matched your search.', 'error');
+        }
+      }
+
+      function queryWithoutLabel(q) {
+        return q.replace(/\(code:.*\)$/i, '').trim();
+      }
+
+      assemblySearchInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          executeDirectSearch();
+        }
+      });
+
+      searchActionBtn.addEventListener('click', executeDirectSearch);
+
+      clearSearchBtn.addEventListener('click', () => {
+        assemblySearchInput.value = '';
+        clearSearchBtn.classList.add('hidden');
+        suggestionsBox.classList.add('hidden');
+        assemblySearchInput.focus();
+      });
+
+      document.addEventListener('click', (e) => {
+        if (!assemblySearchInput.contains(e.target) && !suggestionsBox.contains(e.target)) {
+          suggestionsBox.classList.add('hidden');
+        }
+      });
+
+      // Parent Type Filter Buttons (ASSEMBLY Only vs All Parents)
+      filterBopOnlyBtn.addEventListener('click', () => {
+        parentTypeFilter = 'ASSEMBLY';
+        filterBopOnlyBtn.className = 'px-3 py-1 rounded-md font-semibold bg-white text-blue-700 shadow-sm transition';
+        filterAllTypesBtn.className = 'px-3 py-1 rounded-md font-semibold text-slate-600 hover:text-slate-900 transition';
+        updateSearchSuggestions();
+      });
+
+      filterAllTypesBtn.addEventListener('click', () => {
+        parentTypeFilter = 'ALL';
+        filterAllTypesBtn.className = 'px-3 py-1 rounded-md font-semibold bg-white text-blue-700 shadow-sm transition';
+        filterBopOnlyBtn.className = 'px-3 py-1 rounded-md font-semibold text-slate-600 hover:text-slate-900 transition';
+        updateSearchSuggestions();
+      });
+
+      innerFilterInput.addEventListener('input', renderBopTable);
+      consolidateDupesToggle.addEventListener('change', renderBopTable);
+
+      // Print Button
+      printBtn.addEventListener('click', () => {
+        printTimestamp.textContent = new Date().toLocaleString();
+        window.print();
+      });
+
+      // Copy Table to Clipboard
+      copyTableBtn.addEventListener('click', () => {
+        if (!currentDisplayedRows.length || !selectedParent) return;
+        const header = ['Sr. No.', 'BOP Code', 'BOP Item Name', 'Material Grade', 'Material Section', 'BOM Qty', 'Unit', 'Used In / Source'].join('\t');
+        const lines = currentDisplayedRows.map((r, i) =>
+          [i + 1, r.bopCode, r.bopName, r.mGrade, r.mSection, r.bomQty, r.unit, r.source].join('\t')
+        );
+        const text = `Assembly: ${selectedParent.itemName} (Item Code: ${selectedParent.itemCode} | Internal Code: ${selectedParent.internalCode})\n${header}\n${lines.join('\n')}`;
+
+        const tempArea = document.createElement('textarea');
+        tempArea.value = text;
+        document.body.appendChild(tempArea);
+        tempArea.select();
+        document.execCommand('copy');
+        document.body.removeChild(tempArea);
+        showToast('BOP table copied! Ready to paste into Excel or email.', 'success');
+      });
+
+      // Export Filtered Assembly BOP Sheet to CSV
+      exportCsvBtn.addEventListener('click', () => {
+        if (!currentDisplayedRows.length || !selectedParent) return;
+        const csvRows = [
+          ['Assembly Name', selectedParent.itemName],
+          ['Item Code', selectedParent.itemCode],
+          ['Internal Code', selectedParent.internalCode],
+          [],
+          ['Sr. No.', 'BOP Code', 'BOP Item Name', 'Material Grade', 'Material Section', 'BOM Qty', 'Unit', 'Used In / Source']
+        ];
+        currentDisplayedRows.forEach((r, idx) => {
+          csvRows.push([idx + 1, r.bopCode, r.bopName, r.mGrade, r.mSection, r.bomQty, r.unit, r.source]);
         });
 
-        updateSummaryAndTable();
-    }
+        const csvContent = csvRows.map(row =>
+          row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')
+        ).join('\n');
 
-    function updateSummaryAndTable() {
-        let pdfTotal = pdfExtractedData.length;
-        let excelTotal = systemExcelCodes.length;
-        let duplicateCount = 0;
-        let notFoundCount = 0;
-        let missingExcelCount = 0;
-        let missingPdfCount = 0;
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `BOP_${selectedParent.itemCode}_${selectedParent.internalCode}.csv`;
+        a.click();
+        URL.revokeObjectURL(url);
+      });
 
-        finalComparisonData.forEach(row => {
-            if (row.statuses.includes('NOT_FOUND')) notFoundCount++;
-            if (row.statuses.includes('MISSING_IN_EXCEL')) missingExcelCount++;
-            if (row.statuses.includes('MISSING_IN_PDF')) missingPdfCount++;
-            if (row.statuses.includes('DUPLICATE_PDF') || row.statuses.includes('DUPLICATE_EXCEL')) duplicateCount++;
-        });
-
-        document.getElementById('cnt-pdf-total').innerText = pdfTotal;
-        document.getElementById('cnt-excel-total').innerText = excelTotal;
-        document.getElementById('cnt-duplicates').innerText = duplicateCount;
-        document.getElementById('cnt-notfound').innerText = notFoundCount;
-        document.getElementById('cnt-missing-excel').innerText = missingExcelCount;
-        document.getElementById('cnt-missing-pdf').innerText = missingPdfCount;
-
-        if (finalComparisonData.length > 0) {
-            document.getElementById('export-btn').disabled = false;
-            document.getElementById('status-msg').innerText = `Comparison complete.`;
+      // Restore Database from IndexedDB on startup
+      async function initFromIndexedDB() {
+        const saved = await loadFromIndexedDB();
+        if (saved && saved.parents && saved.meta) {
+          parentMap = new Map(saved.parents);
+          rawBopLineCount = saved.meta.bopLines || 0;
+          rebuildSearchIndex();
+          updateDatabaseUI(saved.meta);
         }
+      }
 
-        renderTable();
-    }
-
-    function setFilter(filterType, btnElem) {
-        currentFilter = filterType;
-        document.querySelectorAll('.filter-btn').forEach(btn => btn.classList.remove('active'));
-        if (btnElem) btnElem.classList.add('active');
-        renderTable();
-    }
-
-    function renderTable() {
-        const tableBody = document.getElementById('table-body');
-        
-        let filtered = finalComparisonData.filter(row => {
-            if (currentFilter === 'ALL') return true;
-            if (currentFilter === 'DUPLICATE') return row.statuses.includes('DUPLICATE_PDF') || row.statuses.includes('DUPLICATE_EXCEL');
-            if (currentFilter === 'NOT_FOUND') return row.statuses.includes('NOT_FOUND');
-            if (currentFilter === 'MISSING_IN_EXCEL') return row.statuses.includes('MISSING_IN_EXCEL');
-            if (currentFilter === 'MISSING_IN_PDF') return row.statuses.includes('MISSING_IN_PDF');
-            return true;
-        });
-
-        if (filtered.length === 0) {
-            tableBody.innerHTML = '<tr><td colspan="5" style="text-align:center; color:#888;">No records match the selected filter.</td></tr>';
-            return;
-        }
-
-        const displayLimit = 300;
-        const displayData = filtered.slice(0, displayLimit);
-        let htmlStr = '';
-
-        for (let row of displayData) {
-            let badgesHtml = row.statuses.map(st => {
-                if (st === 'DUPLICATE_PDF') return '<span class="badge badge-duplicate">Duplicate in PDF</span>';
-                if (st === 'DUPLICATE_EXCEL') return '<span class="badge badge-duplicate">Duplicate in Excel</span>';
-                if (st === 'NOT_FOUND') return '<span class="badge badge-notfound">Not Found in PDF</span>';
-                if (st === 'MISSING_IN_EXCEL') return '<span class="badge badge-missing-excel">Missing in System Excel</span>';
-                if (st === 'MISSING_IN_PDF') return '<span class="badge badge-missing-pdf">Missing in PDF</span>';
-                if (st === 'MATCHED') return '<span class="badge badge-match">Matched</span>';
-                return '';
-            }).join(' ');
-
-            htmlStr += `<tr>
-                <td>${row.source}</td>
-                <td><strong>${row.itemCode}</strong></td>
-                <td>${row.itemName || '-'}</td>
-                <td>${row.itemType || '-'}</td>
-                <td>${badgesHtml}</td>
-            </tr>`;
-        }
-
-        if (filtered.length > displayLimit) {
-            htmlStr += `<tr><td colspan="5" style="text-align:center; color:#e67e22;"><em>+ ${filtered.length - displayLimit} more rows hidden from preview (all will be exported to Excel).</em></td></tr>`;
-        }
-
-        tableBody.innerHTML = htmlStr;
-    }
-
-    function exportToExcel() {
-        if (!finalComparisonData.length) return;
-
-        const excelRows = finalComparisonData.map(item => ({
-            "Source / File Name": item.source,
-            "Item Code": item.itemCode,
-            "Item Name": item.itemName || '-',
-            "Item Type": item.itemType || '-',
-            "Findings / Status": item.statuses.map(st => {
-                if (st === 'DUPLICATE_PDF') return 'Duplicate in PDF';
-                if (st === 'DUPLICATE_EXCEL') return 'Duplicate in System Excel';
-                if (st === 'NOT_FOUND') return 'Not Found in PDF';
-                if (st === 'MISSING_IN_EXCEL') return 'Missing in System Excel';
-                if (st === 'MISSING_IN_PDF') return 'Missing in PDF';
-                if (st === 'MATCHED') return 'Matched';
-                return st;
-            }).join(' | ')
-        }));
-
-        const worksheet = XLSX.utils.json_to_sheet(excelRows);
-        const workbook = XLSX.utils.book_new();
-        XLSX.utils.book_append_sheet(workbook, worksheet, "Item Code Discrepancies");
-
-        XLSX.writeFile(workbook, "Item_Code_Comparison_Report.xlsx");
-    }
-</script>
-
+      initFromIndexedDB();
+    })();
+  </script>
 </body>
 </html>
