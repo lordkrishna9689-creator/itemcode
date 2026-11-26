@@ -40,6 +40,9 @@
       background: #94a3b8;
     }
 
+    /* Signature footer row: hidden on screen */
+    tr.sig-row { display: none; }
+
     /* Dedicated Print Styling for Shop-Floor / Store BOP Sheet */
     @media print {
       @page {
@@ -101,6 +104,29 @@
 
       table.bop-table tr {
         page-break-inside: avoid;
+      }
+
+      /* Signature footer after every item (print only) */
+      tr.sig-row {
+        display: table-row !important;
+        page-break-inside: avoid;
+      }
+      tr.sig-row td {
+        padding: 0 !important;
+        border: 1px solid #334155 !important;
+        background: #ffffff !important;
+      }
+
+      /* "Print this item": hides every other assembly's rows */
+      .print-hide,
+      tr.sig-row.print-hide {
+        display: none !important;
+      }
+
+      /* "Print Each Separately": every finished item starts on a new page */
+      body.print-separate tr.asm-header-row:not(:first-child) {
+        break-before: page;
+        page-break-before: always;
       }
     }
   </style>
@@ -252,6 +278,10 @@
           <button id="searchActionBtn" type="button" class="bg-blue-600 hover:bg-blue-700 active:bg-blue-800 text-white font-semibold px-6 py-3 rounded-xl shadow-sm transition flex items-center justify-center gap-2 text-sm sm:text-base">
             <span>Find BOP Items</span>
           </button>
+
+          <button id="allAsmBtn" type="button" class="bg-slate-800 hover:bg-slate-700 text-white font-semibold px-6 py-3 rounded-xl shadow-sm transition flex items-center justify-center gap-2 text-sm sm:text-base">
+            <span>All Assemblies</span>
+          </button>
         </div>
 
         <!-- Live Autocomplete Suggestions Dropdown -->
@@ -329,6 +359,13 @@
             </svg>
             <span>Print BOP Sheet</span>
           </button>
+
+          <button id="printSeparateBtn" type="button" class="hidden bg-blue-600 hover:bg-blue-500 active:bg-blue-700 text-white px-4 py-2.5 rounded-xl text-xs sm:text-sm font-bold shadow-md transition flex items-center gap-2">
+            <svg class="w-4 h-4" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />
+            </svg>
+            <span>Print Each Separately</span>
+          </button>
         </div>
       </div>
 
@@ -372,22 +409,6 @@
           </tbody>
         </table>
       </div>
-
-      <!-- Print-Only Verification & Store Sign-Off Footer -->
-      <div class="hidden print-only mt-10 pt-6 border-t border-black grid grid-cols-3 gap-8 text-xs">
-        <div>
-          <p class="mb-8 font-semibold">Prepared By:</p>
-          <div class="border-t border-black pt-1">Signature &amp; Date</div>
-        </div>
-        <div>
-          <p class="mb-8 font-semibold">Checked By / Store:</p>
-          <div class="border-t border-black pt-1">Signature &amp; Date</div>
-        </div>
-        <div>
-          <p class="mb-8 font-semibold">Approved By:</p>
-          <div class="border-t border-black pt-1">Signature &amp; Date</div>
-        </div>
-      </div>
     </section>
 
     <!-- Empty / Initial State Placeholder -->
@@ -422,6 +443,8 @@
       let parentTypeFilter = 'ALL';   // 'ALL' | 'ASSEMBLY' | 'SUB ASSEMBLY'
       let currentDisplayedRows = [];
       let rawBopLineCount = 0;
+      let allMode = false;            // true = show every assembly at once
+      let currentGroups = [];         // groups ({parent, rows}) currently rendered
 
       // DOM Elements
       const excelFileInput = document.getElementById('excelFileInput');
@@ -438,6 +461,7 @@
       const assemblySearchInput = document.getElementById('assemblySearchInput');
       const clearSearchBtn = document.getElementById('clearSearchBtn');
       const searchActionBtn = document.getElementById('searchActionBtn');
+      const allAsmBtn = document.getElementById('allAsmBtn');
       const suggestionsBox = document.getElementById('suggestionsBox');
       const quickChipsContainer = document.getElementById('quickChipsContainer');
       const quickChipsList = document.getElementById('quickChipsList');
@@ -459,6 +483,7 @@
       const consolidateDupesToggle = document.getElementById('consolidateDupesToggle');
 
       const printBtn = document.getElementById('printBtn');
+      const printSeparateBtn = document.getElementById('printSeparateBtn');
       const copyTableBtn = document.getElementById('copyTableBtn');
       const exportCsvBtn = document.getElementById('exportCsvBtn');
       const printTimestamp = document.getElementById('printTimestamp');
@@ -883,6 +908,7 @@
 
       // Select a Parent Item (Assembly / Sub-Assembly) & Render its BOP Table
       function selectParentItem(parentObj) {
+        allMode = false;
         selectedParent = parentObj;
         assemblySearchInput.value = `${parentObj.itemName} (Code: ${parentObj.itemCode})`;
         clearSearchBtn.classList.remove('hidden');
@@ -892,16 +918,10 @@
         renderBopTable();
       }
 
-      // Render Exploded BOP Table for Selected Assembly
-      function renderBopTable() {
-        if (!selectedParent) return;
+      // Build (filtered + optionally aggregated) BOP rows for one parent
+      function buildRows(parent, innerQuery, consolidate) {
+        let exploded = explodeBopItems(parent);
 
-        const innerQuery = cleanCellText(innerFilterInput.value).toLowerCase();
-        const consolidate = consolidateDupesToggle.checked;
-
-        let exploded = explodeBopItems(selectedParent);
-
-        // Apply inner table search filter
         if (innerQuery) {
           exploded = exploded.filter(row => {
             const haystack = `${row.bopCode} ${row.bopName} ${row.mGrade} ${row.mSection} ${row.source}`.toLowerCase();
@@ -909,16 +929,12 @@
           });
         }
 
-        // Consolidate identical BOP codes if toggled ON
         if (consolidate && exploded.length > 0) {
           const map = new Map();
           exploded.forEach(item => {
             const key = `${normalizeCode(item.bopCode)}||${normalizeCode(item.bopName)}||${item.mGrade}||${item.mSection}`;
             if (!map.has(key)) {
-              map.set(key, {
-                ...item,
-                sources: new Set([item.source])
-              });
+              map.set(key, { ...item, sources: new Set([item.source]) });
             } else {
               const existing = map.get(key);
               existing.bomQty = (parseFloat(existing.bomQty) || 0) + (parseFloat(item.bomQty) || 0);
@@ -930,58 +946,141 @@
             source: Array.from(entry.sources).join(' + ')
           }));
         }
+        return exploded;
+      }
 
-        currentDisplayedRows = exploded;
+      // All top-level assemblies (falls back to every parent if none are typed ASSEMBLY)
+      function getAllAssemblies() {
+        const asms = searchableParents.filter(p => p.itemType === 'ASSEMBLY');
+        return asms.length ? asms : searchableParents;
+      }
 
-        // Update Summary Header Card
-        assemblyTypeBadge.textContent = selectedParent.itemType || 'ASSEMBLY';
-        assemblyCodeBadge.textContent = `ITEM CODE: ${selectedParent.itemCode}`;
-        internalCodeBadge.textContent = `INTERNAL CODE: ${selectedParent.internalCode}`;
-        selectedAssemblyTitle.textContent = selectedParent.itemName;
-        selectedUnitsText.textContent = selectedParent.units || 'NOS';
-        totalItemsCount.textContent = exploded.length;
+      // Render BOP Table (single assembly OR all assemblies)
+      function renderBopTable() {
+        if (!allMode && !selectedParent) return;
 
-        const sumQty = exploded.reduce((acc, r) => acc + (parseFloat(r.bomQty) || 0), 0);
+        const innerQuery = cleanCellText(innerFilterInput.value).toLowerCase();
+        const consolidate = consolidateDupesToggle.checked;
+
+        const groups = allMode
+          ? getAllAssemblies()
+              .map(p => ({ parent: p, rows: buildRows(p, innerQuery, consolidate) }))
+              .filter(g => g.rows.length > 0)
+          : [{ parent: selectedParent, rows: buildRows(selectedParent, innerQuery, consolidate) }];
+
+        currentGroups = groups;
+
+        // Flat list (used by Copy / CSV) with assembly info attached
+        currentDisplayedRows = groups.flatMap(g =>
+          g.rows.map(r => ({
+            ...r,
+            asmName: g.parent.itemName,
+            asmCode: g.parent.itemCode,
+            asmInternal: g.parent.internalCode
+          }))
+        );
+
+        // Summary header
+        if (allMode) {
+          assemblyTypeBadge.textContent = 'ALL ASSEMBLIES';
+          assemblyCodeBadge.textContent = `ASSEMBLIES: ${groups.length}`;
+          internalCodeBadge.textContent = 'INTERNAL CODE: —';
+          selectedAssemblyTitle.textContent = 'Complete BOP List — All Assemblies';
+          selectedUnitsText.textContent = '—';
+        } else {
+          assemblyTypeBadge.textContent = selectedParent.itemType || 'ASSEMBLY';
+          assemblyCodeBadge.textContent = `ITEM CODE: ${selectedParent.itemCode}`;
+          internalCodeBadge.textContent = `INTERNAL CODE: ${selectedParent.internalCode}`;
+          selectedAssemblyTitle.textContent = selectedParent.itemName;
+          selectedUnitsText.textContent = selectedParent.units || 'NOS';
+        }
+
+        printSeparateBtn.classList.toggle('hidden', !allMode);
+
+        totalItemsCount.textContent = currentDisplayedRows.length;
+        const sumQty = currentDisplayedRows.reduce((acc, r) => acc + (parseFloat(r.bomQty) || 0), 0);
         totalBomQtyCount.textContent = Number.isInteger(sumQty) ? sumQty : sumQty.toFixed(2);
 
-        // Render Table Rows
+        // Table body
         bopTableBody.innerHTML = '';
 
-        if (exploded.length === 0) {
+        if (currentDisplayedRows.length === 0) {
           bopTableBody.innerHTML = `
-            <tr>
-              <td colspan="8" class="py-8 px-4 text-center text-slate-500 text-sm">
-                No BOP (Bought Out Part) items found for <strong>${escapeHtml(selectedParent.itemName)}</strong>${innerQuery ? ' matching your filter' : ''}.
-              </td>
-            </tr>
-          `;
+            <tr><td colspan="8" class="py-8 px-4 text-center text-slate-500 text-sm">
+              No BOP (Bought Out Part) items found${innerQuery ? ' matching your filter' : ''}.
+            </td></tr>`;
         } else {
-          exploded.forEach((item, index) => {
-            const tr = document.createElement('tr');
-            tr.className = index % 2 === 0 ? 'bg-white hover:bg-blue-50/40' : 'bg-slate-50/60 hover:bg-blue-50/40';
+          groups.forEach((g, gi) => {
+            if (allMode) {
+              const hr = document.createElement('tr');
+              hr.className = 'asm-header-row bg-slate-800 text-white';
+              hr.dataset.asm = gi;
+              hr.innerHTML = `
+                <td colspan="8" class="py-2.5 px-3 text-sm font-bold print:text-black" style="background:#cbd5e1;-webkit-print-color-adjust:exact;print-color-adjust:exact;color:#0f172a">
+                  <div class="flex items-center justify-between gap-3">
+                    <div>
+                      ${escapeHtml(g.parent.itemName)}
+                      <span class="font-mono-code text-xs font-semibold ml-2">Item Code: ${escapeHtml(g.parent.itemCode)} &bull; Internal: ${escapeHtml(g.parent.internalCode)} &bull; ${g.rows.length} BOP items</span>
+                    </div>
+                    <button type="button" data-print-asm="${gi}" class="no-print print-asm-btn shrink-0 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm transition">
+                      🖨 Print this item
+                    </button>
+                  </div>
+                </td>`;
+              bopTableBody.appendChild(hr);
+            }
 
-            const gradeDisplay = item.mGrade && item.mGrade !== '—'
-              ? `<span class="inline-block font-semibold text-slate-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded text-xs print:border-none print:bg-transparent print:p-0">${escapeHtml(item.mGrade)}</span>`
-              : `<span class="text-slate-400 print:text-black">—</span>`;
+            g.rows.forEach((item, index) => {
+              const tr = document.createElement('tr');
+              tr.dataset.asm = gi;
+              tr.className = index % 2 === 0 ? 'bg-white hover:bg-blue-50/40' : 'bg-slate-50/60 hover:bg-blue-50/40';
 
-            const isDirect = item.source === 'Direct Assembly';
-            const sourceBadge = isDirect
-              ? `<span class="inline-block text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded print:border-none print:bg-transparent print:text-black print:p-0">Direct Assembly</span>`
-              : `<span class="inline-block text-xs font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded print:border-none print:bg-transparent print:text-black print:p-0">${escapeHtml(item.source)}</span>`;
+              const gradeDisplay = item.mGrade && item.mGrade !== '—'
+                ? `<span class="inline-block font-semibold text-slate-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded text-xs print:border-none print:bg-transparent print:p-0">${escapeHtml(item.mGrade)}</span>`
+                : `<span class="text-slate-400 print:text-black">—</span>`;
 
-            const qtyFormatted = Number.isInteger(item.bomQty) ? item.bomQty : Number(item.bomQty).toFixed(2);
+              const isDirect = item.source === 'Direct Assembly';
+              const sourceBadge = isDirect
+                ? `<span class="inline-block text-xs font-medium text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded print:border-none print:bg-transparent print:text-black print:p-0">Direct Assembly</span>`
+                : `<span class="inline-block text-xs font-medium text-indigo-700 bg-indigo-50 border border-indigo-200 px-2 py-0.5 rounded print:border-none print:bg-transparent print:text-black print:p-0">${escapeHtml(item.source)}</span>`;
 
-            tr.innerHTML = `
-              <td class="py-2.5 px-3 text-center font-medium text-slate-500 print:text-black">${index + 1}</td>
-              <td class="py-2.5 px-3 font-mono-code text-xs font-bold text-blue-700 print:text-black">${escapeHtml(item.bopCode)}</td>
-              <td class="py-2.5 px-3 font-semibold text-slate-900 print:text-black">${escapeHtml(item.bopName)}</td>
-              <td class="py-2.5 px-3 text-xs">${gradeDisplay}</td>
-              <td class="py-2.5 px-3 text-slate-700 text-xs print:text-black">${escapeHtml(item.mSection)}</td>
-              <td class="py-2.5 px-3 text-center font-bold text-slate-900 print:text-black">${escapeHtml(String(qtyFormatted))}</td>
-              <td class="py-2.5 px-3 text-center text-xs font-medium text-slate-600 print:text-black">${escapeHtml(item.unit)}</td>
-              <td class="py-2.5 px-3 text-xs">${sourceBadge}</td>
-            `;
-            bopTableBody.appendChild(tr);
+              const qtyFormatted = Number.isInteger(item.bomQty) ? item.bomQty : Number(item.bomQty).toFixed(2);
+
+              tr.innerHTML = `
+                <td class="py-2.5 px-3 text-center font-medium text-slate-500 print:text-black">${index + 1}</td>
+                <td class="py-2.5 px-3 font-mono-code text-xs font-bold text-blue-700 print:text-black">${escapeHtml(item.bopCode)}</td>
+                <td class="py-2.5 px-3 font-semibold text-slate-900 print:text-black">${escapeHtml(item.bopName)}</td>
+                <td class="py-2.5 px-3 text-xs">${gradeDisplay}</td>
+                <td class="py-2.5 px-3 text-slate-700 text-xs print:text-black">${escapeHtml(item.mSection)}</td>
+                <td class="py-2.5 px-3 text-center font-bold text-slate-900 print:text-black">${escapeHtml(String(qtyFormatted))}</td>
+                <td class="py-2.5 px-3 text-center text-xs font-medium text-slate-600 print:text-black">${escapeHtml(item.unit)}</td>
+                <td class="py-2.5 px-3 text-xs">${sourceBadge}</td>
+              `;
+              bopTableBody.appendChild(tr);
+            });
+
+            // Signature footer for this item (visible only when printing)
+            const sig = document.createElement('tr');
+            sig.className = 'sig-row';
+            sig.dataset.asm = gi;
+            sig.innerHTML = `
+              <td colspan="8">
+                <div style="display:grid;grid-template-columns:repeat(3,1fr);">
+                  <div style="padding:8px 10px;border-right:1px solid #334155;">
+                    <div style="height:42px;"></div>
+                    <div style="border-top:1px solid #000;padding-top:3px;font-size:9pt;font-weight:600;">Prepared By (Signature &amp; Date)</div>
+                  </div>
+                  <div style="padding:8px 10px;border-right:1px solid #334155;">
+                    <div style="height:42px;"></div>
+                    <div style="border-top:1px solid #000;padding-top:3px;font-size:9pt;font-weight:600;">R&amp;D (Signature &amp; Date)</div>
+                  </div>
+                  <div style="padding:8px 10px;">
+                    <div style="height:42px;"></div>
+                    <div style="border-top:1px solid #000;padding-top:3px;font-size:9pt;font-weight:600;">Purchase (Signature &amp; Date)</div>
+                  </div>
+                </div>
+              </td>`;
+            bopTableBody.appendChild(sig);
           });
         }
 
@@ -1110,6 +1209,7 @@
       // Clear Saved Database
       clearDbBtn.addEventListener('click', async () => {
         await clearIndexedDB();
+        allMode = false;
         parentMap.clear();
         searchableParents = [];
         selectedParent = null;
@@ -1161,6 +1261,21 @@
 
       searchActionBtn.addEventListener('click', executeDirectSearch);
 
+      // All Assemblies button: show every assembly's BOP items at once
+      allAsmBtn.addEventListener('click', () => {
+        if (!searchableParents.length) {
+          showToast('Please upload your ERP Excel database first.', 'error');
+          return;
+        }
+        allMode = true;
+        selectedParent = null;
+        assemblySearchInput.value = '';
+        clearSearchBtn.classList.add('hidden');
+        suggestionsBox.classList.add('hidden');
+        innerFilterInput.value = '';
+        renderBopTable();
+      });
+
       clearSearchBtn.addEventListener('click', () => {
         assemblySearchInput.value = '';
         clearSearchBtn.classList.add('hidden');
@@ -1198,17 +1313,90 @@
         window.print();
       });
 
-      // Copy Table to Clipboard
+      // Print this item: print only one assembly's BOM from the All Assemblies list
+      bopTableBody.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-print-asm]');
+        if (!btn) return;
+        const gi = Number(btn.dataset.printAsm);
+        const g = currentGroups[gi];
+        if (!g) return;
+
+        // Hide every other assembly's rows while printing
+        const hidden = [];
+        bopTableBody.querySelectorAll('tr[data-asm]').forEach(tr => {
+          if (Number(tr.dataset.asm) !== gi) {
+            tr.classList.add('print-hide');
+            hidden.push(tr);
+          }
+        });
+
+        // Temporarily show this assembly in the sheet header
+        const saved = {
+          type: assemblyTypeBadge.textContent,
+          code: assemblyCodeBadge.textContent,
+          internal: internalCodeBadge.textContent,
+          title: selectedAssemblyTitle.textContent,
+          units: selectedUnitsText.textContent,
+          items: totalItemsCount.textContent,
+          qty: totalBomQtyCount.textContent
+        };
+        const sumQty = g.rows.reduce((acc, r) => acc + (parseFloat(r.bomQty) || 0), 0);
+        assemblyTypeBadge.textContent = g.parent.itemType || 'ASSEMBLY';
+        assemblyCodeBadge.textContent = `ITEM CODE: ${g.parent.itemCode}`;
+        internalCodeBadge.textContent = `INTERNAL CODE: ${g.parent.internalCode}`;
+        selectedAssemblyTitle.textContent = g.parent.itemName;
+        selectedUnitsText.textContent = g.parent.units || 'NOS';
+        totalItemsCount.textContent = g.rows.length;
+        totalBomQtyCount.textContent = Number.isInteger(sumQty) ? sumQty : sumQty.toFixed(2);
+        printTimestamp.textContent = new Date().toLocaleString();
+
+        const cleanup = () => {
+          hidden.forEach(tr => tr.classList.remove('print-hide'));
+          assemblyTypeBadge.textContent = saved.type;
+          assemblyCodeBadge.textContent = saved.code;
+          internalCodeBadge.textContent = saved.internal;
+          selectedAssemblyTitle.textContent = saved.title;
+          selectedUnitsText.textContent = saved.units;
+          totalItemsCount.textContent = saved.items;
+          totalBomQtyCount.textContent = saved.qty;
+          window.removeEventListener('afterprint', cleanup);
+        };
+        window.addEventListener('afterprint', cleanup);
+        window.print();
+      });
+
+      // Print Each Separately: every finished item starts on its own page
+      printSeparateBtn.addEventListener('click', () => {
+        if (!allMode || !currentDisplayedRows.length) return;
+        printTimestamp.textContent = new Date().toLocaleString();
+        document.body.classList.add('print-separate');
+        const cleanup = () => {
+          document.body.classList.remove('print-separate');
+          window.removeEventListener('afterprint', cleanup);
+        };
+        window.addEventListener('afterprint', cleanup);
+        window.print();
+      });
+
+      // Copy Table to Clipboard (works for single assembly and All mode)
       copyTableBtn.addEventListener('click', () => {
-        if (!currentDisplayedRows.length || !selectedParent) return;
-        const header = ['Sr. No.', 'BOP Code', 'BOP Item Name', 'Material Grade', 'Material Section', 'BOM Qty', 'Unit', 'Used In / Source'].join('\t');
-        const lines = currentDisplayedRows.map((r, i) =>
-          [i + 1, r.bopCode, r.bopName, r.mGrade, r.mSection, r.bomQty, r.unit, r.source].join('\t')
-        );
-        const text = `Assembly: ${selectedParent.itemName} (Item Code: ${selectedParent.itemCode} | Internal Code: ${selectedParent.internalCode})\n${header}\n${lines.join('\n')}`;
+        if (!currentDisplayedRows.length) return;
+        const header = (allMode
+          ? ['Assembly', 'Assembly Code', 'Sr. No.', 'BOP Code', 'BOP Item Name', 'Material Grade', 'Material Section', 'BOM Qty', 'Unit', 'Used In / Source']
+          : ['Sr. No.', 'BOP Code', 'BOP Item Name', 'Material Grade', 'Material Section', 'BOM Qty', 'Unit', 'Used In / Source']
+        ).join('\t');
+
+        const lines = currentDisplayedRows.map((r, i) => {
+          const base = [i + 1, r.bopCode, r.bopName, r.mGrade, r.mSection, r.bomQty, r.unit, r.source];
+          return (allMode ? [r.asmName, r.asmCode, ...base] : base).join('\t');
+        });
+
+        const title = allMode
+          ? 'All Assemblies — BOP List'
+          : `Assembly: ${selectedParent.itemName} (Item Code: ${selectedParent.itemCode} | Internal Code: ${selectedParent.internalCode})`;
 
         const tempArea = document.createElement('textarea');
-        tempArea.value = text;
+        tempArea.value = `${title}\n${header}\n${lines.join('\n')}`;
         document.body.appendChild(tempArea);
         tempArea.select();
         document.execCommand('copy');
@@ -1216,29 +1404,31 @@
         showToast('BOP table copied! Ready to paste into Excel or email.', 'success');
       });
 
-      // Export Filtered Assembly BOP Sheet to CSV
+      // Export BOP Sheet to CSV (works for single assembly and All mode)
       exportCsvBtn.addEventListener('click', () => {
-        if (!currentDisplayedRows.length || !selectedParent) return;
-        const csvRows = [
-          ['Assembly Name', selectedParent.itemName],
-          ['Item Code', selectedParent.itemCode],
-          ['Internal Code', selectedParent.internalCode],
-          [],
-          ['Sr. No.', 'BOP Code', 'BOP Item Name', 'Material Grade', 'Material Section', 'BOM Qty', 'Unit', 'Used In / Source']
-        ];
-        currentDisplayedRows.forEach((r, idx) => {
-          csvRows.push([idx + 1, r.bopCode, r.bopName, r.mGrade, r.mSection, r.bomQty, r.unit, r.source]);
-        });
+        if (!currentDisplayedRows.length) return;
+        const csvRows = [];
+        if (allMode) {
+          csvRows.push(['ALL ASSEMBLIES — BOP LIST'], []);
+          csvRows.push(['Assembly', 'Assembly Code', 'Internal Code', 'Sr. No.', 'BOP Code', 'BOP Item Name', 'Material Grade', 'Material Section', 'BOM Qty', 'Unit', 'Used In / Source']);
+          let sr = 0, last = '';
+          currentDisplayedRows.forEach(r => {
+            if (r.asmCode !== last) { sr = 0; last = r.asmCode; }
+            sr++;
+            csvRows.push([r.asmName, r.asmCode, r.asmInternal, sr, r.bopCode, r.bopName, r.mGrade, r.mSection, r.bomQty, r.unit, r.source]);
+          });
+        } else {
+          csvRows.push(['Assembly Name', selectedParent.itemName], ['Item Code', selectedParent.itemCode], ['Internal Code', selectedParent.internalCode], []);
+          csvRows.push(['Sr. No.', 'BOP Code', 'BOP Item Name', 'Material Grade', 'Material Section', 'BOM Qty', 'Unit', 'Used In / Source']);
+          currentDisplayedRows.forEach((r, idx) => csvRows.push([idx + 1, r.bopCode, r.bopName, r.mGrade, r.mSection, r.bomQty, r.unit, r.source]));
+        }
 
-        const csvContent = csvRows.map(row =>
-          row.map(cell => `"${String(cell).replace(/"/g, '""')}"`).join(',')
-        ).join('\n');
-
+        const csvContent = csvRows.map(row => row.map(c => `"${String(c).replace(/"/g, '""')}"`).join(',')).join('\n');
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = `BOP_${selectedParent.itemCode}_${selectedParent.internalCode}.csv`;
+        a.download = allMode ? 'BOP_ALL_ASSEMBLIES.csv' : `BOP_${selectedParent.itemCode}_${selectedParent.internalCode}.csv`;
         a.click();
         URL.revokeObjectURL(url);
       });
