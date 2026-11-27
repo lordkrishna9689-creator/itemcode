@@ -444,6 +444,9 @@
       let rawBopLineCount = 0;
       let allMode = false;            // true = show every assembly at once
       let currentGroups = [];         // groups ({parent, rows}) currently rendered
+      const selectedAsm = new Set();  // assembly keys ticked for "Print Selected"
+      const multiPick = new Set();    // assembly keys picked in the search box (multi-select)
+      let multiView = false;          // true = All-Assemblies layout limited to the picked assemblies
 
       // DOM Elements
       const excelFileInput = document.getElementById('excelFileInput');
@@ -778,6 +781,8 @@
         }
 
         parentMap = newParentMap;
+        multiPick.clear(); selectedAsm.clear(); multiView = false;
+        renderMultiBar();
         rawBopLineCount = bopLineCounter;
         rebuildSearchIndex();
 
@@ -908,6 +913,7 @@
       // Select a Parent Item (Assembly / Sub-Assembly) & Render its BOP Table
       function selectParentItem(parentObj) {
         allMode = false;
+        multiView = false;
         selectedParent = parentObj;
         assemblySearchInput.value = `${parentObj.itemName} (Code: ${parentObj.itemCode})`;
         clearSearchBtn.classList.remove('hidden');
@@ -950,6 +956,7 @@
 
       // All top-level assemblies (falls back to every parent if none are typed ASSEMBLY)
       function getAllAssemblies() {
+        if (multiView) return Array.from(multiPick).map(k => parentMap.get(k)).filter(Boolean);
         const asms = searchableParents.filter(p => p.itemType === 'ASSEMBLY');
         return asms.length ? asms : searchableParents;
       }
@@ -981,10 +988,10 @@
 
         // Summary header
         if (allMode) {
-          assemblyTypeBadge.textContent = 'ALL ASSEMBLIES';
+          assemblyTypeBadge.textContent = multiView ? 'SELECTED ASSEMBLIES' : 'ALL ASSEMBLIES';
           assemblyCodeBadge.textContent = `ASSEMBLIES: ${groups.length}`;
           internalCodeBadge.textContent = 'INTERNAL CODE: —';
-          selectedAssemblyTitle.textContent = 'Complete BOP List — All Assemblies';
+          selectedAssemblyTitle.textContent = multiView ? 'BOP List — Selected Assemblies' : 'Complete BOP List — All Assemblies';
           selectedUnitsText.textContent = '—';
         } else {
           assemblyTypeBadge.textContent = selectedParent.itemType || 'ASSEMBLY';
@@ -995,6 +1002,7 @@
         }
 
         printSeparateBtn.classList.toggle('hidden', !allMode);
+        updateSelectionBar();
 
         totalItemsCount.textContent = currentDisplayedRows.length;
         const sumQty = currentDisplayedRows.reduce((acc, r) => acc + (parseFloat(r.bomQty) || 0), 0);
@@ -1017,9 +1025,12 @@
               hr.innerHTML = `
                 <td colspan="7" class="py-2.5 px-3 text-sm font-bold print:text-black" style="background:#cbd5e1;-webkit-print-color-adjust:exact;print-color-adjust:exact;color:#0f172a">
                   <div class="flex items-center justify-between gap-3">
+                    <div class="flex items-center gap-3">
+                    <input type="checkbox" data-sel-asm="${gi}" ${selectedAsm.has(g.parent.key) ? 'checked' : ''} title="Select for printing" class="no-print w-4 h-4 shrink-0 cursor-pointer accent-emerald-600" />
                     <div>
                       ${escapeHtml(g.parent.itemName)}
                       <span class="font-mono-code text-xs font-semibold ml-2">Item Code: ${escapeHtml(g.parent.itemCode)} &bull; Internal: ${escapeHtml(g.parent.internalCode)} &bull; ${g.rows.length} BOP items</span>
+                    </div>
                     </div>
                     <button type="button" data-print-asm="${gi}" class="no-print print-asm-btn shrink-0 bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-sm transition">
                       🖨 Print this item
@@ -1129,13 +1140,20 @@
           return;
         }
 
-        suggestionsBox.innerHTML = '';
+        suggestionsBox.innerHTML = `<div class="sticky top-0 z-10 flex items-center justify-between gap-3 px-4 py-2 bg-slate-50 border-b border-slate-200 text-[11px] text-slate-500"><span>Click a name to open one assembly &bull; tick boxes to pick several</span><button type="button" data-pick-all class="font-semibold text-blue-700 hover:underline shrink-0">Tick all shown</button></div>`;
+        suggestionsBox.querySelector('[data-pick-all]').addEventListener('click', () => {
+          matches.forEach(m => multiPick.add(m.key));
+          suggestionsBox.querySelectorAll('[data-pick]').forEach(cb => { cb.checked = true; });
+          renderMultiBar();
+        });
         matches.forEach(item => {
           const bopCount = explodeBopItems(item).length;
-          const div = document.createElement('button');
-          div.type = 'button';
-          div.className = 'w-full text-left px-4 py-2.5 hover:bg-blue-50 flex items-center justify-between gap-3 transition';
+          const div = document.createElement('div');
+          div.setAttribute('role', 'button');
+          div.className = 'w-full text-left px-4 py-2.5 hover:bg-blue-50 flex items-center justify-between gap-3 transition cursor-pointer';
           div.innerHTML = `
+            <div class="min-w-0 flex items-center gap-3">
+            <input type="checkbox" data-pick="${escapeHtml(item.key)}" ${multiPick.has(item.key) ? 'checked' : ''} title="Add to selection" class="w-4 h-4 shrink-0 cursor-pointer accent-blue-600" />
             <div class="min-w-0">
               <div class="font-semibold text-sm text-slate-800 truncate">${escapeHtml(item.itemName)}</div>
               <div class="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
@@ -1146,11 +1164,19 @@
                 <span class="uppercase text-[11px] font-bold text-slate-600">${escapeHtml(item.itemType)}</span>
               </div>
             </div>
+            </div>
             <span class="text-xs font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-md shrink-0">
               ${bopCount} BOP Items
             </span>
           `;
-          div.addEventListener('click', () => selectParentItem(item));
+          div.addEventListener('click', (e) => {
+            if (e.target.closest('[data-pick]')) return;   // checkbox handles itself
+            selectParentItem(item);
+          });
+          div.querySelector('[data-pick]').addEventListener('change', (e) => {
+            if (e.target.checked) multiPick.add(item.key); else multiPick.delete(item.key);
+            renderMultiBar();
+          });
           suggestionsBox.appendChild(div);
         });
 
@@ -1208,7 +1234,10 @@
       clearDbBtn.addEventListener('click', async () => {
         await clearIndexedDB();
         allMode = false;
+        multiView = false;
+        multiPick.clear(); selectedAsm.clear();
         parentMap.clear();
+        renderMultiBar();
         searchableParents = [];
         selectedParent = null;
         assemblySearchInput.value = '';
@@ -1266,6 +1295,7 @@
           return;
         }
         allMode = true;
+        multiView = false;
         selectedParent = null;
         assemblySearchInput.value = '';
         clearSearchBtn.classList.add('hidden');
@@ -1742,6 +1772,184 @@
           XLSX.writeFile(wb, 'BOM_EDITED.xlsx');
         });
       })();
+
+      // =====================================================================
+      // PRINT SELECTED: in "All Assemblies" view, tick assemblies and print only those
+      // =====================================================================
+      const selBar = document.createElement('div');
+      selBar.className = 'no-print hidden bg-emerald-50 border-b border-emerald-200 px-5 py-3 flex flex-wrap items-center gap-2.5 text-xs';
+      selBar.innerHTML = `
+        <span class="font-semibold text-emerald-900">Tick the assemblies you want to print:</span>
+        <button id="selAllBtn" type="button" class="px-3 py-1.5 rounded-lg bg-white border border-emerald-300 text-emerald-800 font-semibold hover:bg-emerald-100 transition">Select All</button>
+        <button id="selNoneBtn" type="button" class="px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-slate-700 font-semibold hover:bg-slate-100 transition">Clear</button>
+        <span id="selCount" class="text-emerald-800 font-medium"></span>
+        <div class="flex-1"></div>
+        <button id="printSelBtn" type="button" class="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold shadow-sm transition">🖨 Print Selected</button>
+        <button id="printSelSepBtn" type="button" class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-sm transition">🖨 Print Selected (each on new page)</button>`;
+      innerFilterInput.parentElement.parentElement.insertAdjacentElement('afterend', selBar);
+
+      const selAllBtn = selBar.querySelector('#selAllBtn');
+      const selNoneBtn = selBar.querySelector('#selNoneBtn');
+      const selCount = selBar.querySelector('#selCount');
+      const printSelBtn = selBar.querySelector('#printSelBtn');
+      const printSelSepBtn = selBar.querySelector('#printSelSepBtn');
+
+      function selectedIndexes() {
+        const idx = [];
+        currentGroups.forEach((g, gi) => { if (selectedAsm.has(g.parent.key)) idx.push(gi); });
+        return idx;
+      }
+
+      function updateSelectionBar() {
+        selBar.classList.toggle('hidden', !allMode);
+        const n = selectedIndexes().length;
+        selCount.textContent = `${n} of ${currentGroups.length} selected`;
+        printSelBtn.textContent = `🖨 Print Selected (${n})`;
+        [printSelBtn, printSelSepBtn].forEach(b => {
+          b.disabled = n === 0;
+          b.classList.toggle('opacity-50', n === 0);
+          b.classList.toggle('cursor-not-allowed', n === 0);
+        });
+      }
+
+      bopTableBody.addEventListener('change', (e) => {
+        const cb = e.target.closest('[data-sel-asm]');
+        if (!cb) return;
+        const g = currentGroups[Number(cb.dataset.selAsm)];
+        if (!g) return;
+        if (cb.checked) selectedAsm.add(g.parent.key); else selectedAsm.delete(g.parent.key);
+        updateSelectionBar();
+      });
+
+      function setAllSelected(on) {
+        currentGroups.forEach(g => { if (on) selectedAsm.add(g.parent.key); else selectedAsm.delete(g.parent.key); });
+        bopTableBody.querySelectorAll('[data-sel-asm]').forEach(cb => { cb.checked = on; });
+        updateSelectionBar();
+      }
+      selAllBtn.addEventListener('click', () => setAllSelected(true));
+      selNoneBtn.addEventListener('click', () => setAllSelected(false));
+
+      function printSelected(separatePages) {
+        const idx = selectedIndexes();
+        if (!idx.length) { showToast('Tick at least one assembly to print.', 'error'); return; }
+        const keep = new Set(idx);
+
+        // hide every assembly that is not ticked
+        const hidden = [];
+        bopTableBody.querySelectorAll('tr[data-asm]').forEach(tr => {
+          if (!keep.has(Number(tr.dataset.asm))) { tr.classList.add('print-hide'); hidden.push(tr); }
+        });
+
+        // each ticked assembly (after the first) starts on a new page
+        const pageBreaks = [];
+        if (separatePages) {
+          idx.slice(1).forEach(gi => {
+            const hr = bopTableBody.querySelector(`tr.asm-header-row[data-asm="${gi}"]`);
+            if (hr) { hr.style.breakBefore = 'page'; pageBreaks.push(hr); }
+          });
+        }
+
+        // sheet header shows the totals of the selection
+        const saved = {
+          type: assemblyTypeBadge.textContent, code: assemblyCodeBadge.textContent,
+          internal: internalCodeBadge.textContent, title: selectedAssemblyTitle.textContent,
+          units: selectedUnitsText.textContent, items: totalItemsCount.textContent, qty: totalBomQtyCount.textContent
+        };
+        let items = 0, qty = 0;
+        idx.forEach(gi => {
+          const g = currentGroups[gi];
+          items += g.rows.length;
+          qty += g.rows.reduce((acc, r) => acc + (parseFloat(r.bomQty) || 0), 0);
+        });
+        assemblyTypeBadge.textContent = 'SELECTED ASSEMBLIES';
+        assemblyCodeBadge.textContent = `ASSEMBLIES: ${idx.length}`;
+        internalCodeBadge.textContent = 'INTERNAL CODE: —';
+        selectedAssemblyTitle.textContent = 'BOP List — Selected Assemblies';
+        selectedUnitsText.textContent = '—';
+        totalItemsCount.textContent = items;
+        totalBomQtyCount.textContent = Number.isInteger(qty) ? qty : qty.toFixed(2);
+        printTimestamp.textContent = new Date().toLocaleString();
+
+        const cleanup = () => {
+          hidden.forEach(tr => tr.classList.remove('print-hide'));
+          pageBreaks.forEach(tr => { tr.style.breakBefore = ''; });
+          assemblyTypeBadge.textContent = saved.type;
+          assemblyCodeBadge.textContent = saved.code;
+          internalCodeBadge.textContent = saved.internal;
+          selectedAssemblyTitle.textContent = saved.title;
+          selectedUnitsText.textContent = saved.units;
+          totalItemsCount.textContent = saved.items;
+          totalBomQtyCount.textContent = saved.qty;
+          window.removeEventListener('afterprint', cleanup);
+        };
+        window.addEventListener('afterprint', cleanup);
+        window.print();
+      }
+      printSelBtn.addEventListener('click', () => printSelected(false));
+      printSelSepBtn.addEventListener('click', () => printSelected(true));
+
+      // =====================================================================
+      // MULTI-SELECT SEARCH: pick several assemblies from the search dropdown
+      // =====================================================================
+      const multiBar = document.createElement('div');
+      multiBar.className = 'no-print hidden bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 text-xs';
+      multiBar.innerHTML = `
+        <div class="flex items-start gap-2.5 flex-wrap">
+          <span class="font-semibold text-blue-900 pt-1.5 whitespace-nowrap">Selected (<span id="mbCount">0</span>):</span>
+          <div id="mbChips" class="flex flex-wrap gap-1.5 flex-1 min-w-[200px] max-h-24 overflow-y-auto"></div>
+          <button id="mbShow" type="button" class="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold shadow-sm transition">Show Selected</button>
+          <button id="mbClear" type="button" class="px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-700 font-semibold hover:bg-slate-100 transition">Clear</button>
+        </div>`;
+      quickChipsContainer.insertAdjacentElement('beforebegin', multiBar);
+
+      const mbCount = multiBar.querySelector('#mbCount');
+      const mbChips = multiBar.querySelector('#mbChips');
+
+      function renderMultiBar() {
+        const keys = Array.from(multiPick).filter(k => parentMap.has(k));
+        multiBar.classList.toggle('hidden', keys.length === 0);
+        mbCount.textContent = keys.length;
+        mbChips.innerHTML = keys.map(k => {
+          const p = parentMap.get(k);
+          return `<span class="inline-flex items-center gap-1.5 bg-white border border-blue-200 text-slate-800 font-medium rounded-lg pl-2.5 pr-1.5 py-1 max-w-xs">
+            <span class="truncate">${escapeHtml(p.itemName)} [${escapeHtml(p.itemCode)}]</span>
+            <button type="button" data-unpick="${escapeHtml(k)}" title="Remove" class="text-slate-400 hover:text-rose-600 font-bold leading-none">✕</button>
+          </span>`;
+        }).join('');
+      }
+
+      mbChips.addEventListener('click', (e) => {
+        const btn = e.target.closest('[data-unpick]');
+        if (!btn) return;
+        multiPick.delete(btn.dataset.unpick);
+        selectedAsm.delete(btn.dataset.unpick);
+        suggestionsBox.querySelectorAll('[data-pick]').forEach(cb => { cb.checked = multiPick.has(cb.dataset.pick); });
+        renderMultiBar();
+        if (multiView) renderBopTable();
+      });
+
+      multiBar.querySelector('#mbClear').addEventListener('click', () => {
+        multiPick.forEach(k => selectedAsm.delete(k));
+        multiPick.clear();
+        suggestionsBox.querySelectorAll('[data-pick]').forEach(cb => { cb.checked = false; });
+        renderMultiBar();
+        if (multiView) renderBopTable();
+      });
+
+      multiBar.querySelector('#mbShow').addEventListener('click', () => {
+        const keys = Array.from(multiPick).filter(k => parentMap.has(k));
+        if (!keys.length) return;
+        allMode = true;
+        multiView = true;
+        selectedParent = null;
+        assemblySearchInput.value = '';
+        clearSearchBtn.classList.add('hidden');
+        suggestionsBox.classList.add('hidden');
+        innerFilterInput.value = '';
+        keys.forEach(k => selectedAsm.add(k));   // pre-tick so "Print Selected" works straight away
+        renderBopTable();
+        resultsSection.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      });
 
       initFromIndexedDB();
     })();
