@@ -398,7 +398,6 @@
               <th class="py-3 px-3 font-bold w-28">BOP Code</th>
               <th class="py-3 px-3 font-bold">BOP Item Name</th>
               <th class="py-3 px-3 font-bold w-32">Material Grade</th>
-              <th class="py-3 px-3 font-bold w-32">Material Section</th>
               <th class="py-3 px-3 font-bold w-24 text-center">BOM Qty</th>
               <th class="py-3 px-3 font-bold w-20 text-center">Unit</th>
               <th class="py-3 px-3 font-bold w-56">Used In / Source</th>
@@ -1006,7 +1005,7 @@
 
         if (currentDisplayedRows.length === 0) {
           bopTableBody.innerHTML = `
-            <tr><td colspan="8" class="py-8 px-4 text-center text-slate-500 text-sm">
+            <tr><td colspan="7" class="py-8 px-4 text-center text-slate-500 text-sm">
               No BOP (Bought Out Part) items found${innerQuery ? ' matching your filter' : ''}.
             </td></tr>`;
         } else {
@@ -1016,7 +1015,7 @@
               hr.className = 'asm-header-row bg-slate-800 text-white';
               hr.dataset.asm = gi;
               hr.innerHTML = `
-                <td colspan="8" class="py-2.5 px-3 text-sm font-bold print:text-black" style="background:#cbd5e1;-webkit-print-color-adjust:exact;print-color-adjust:exact;color:#0f172a">
+                <td colspan="7" class="py-2.5 px-3 text-sm font-bold print:text-black" style="background:#cbd5e1;-webkit-print-color-adjust:exact;print-color-adjust:exact;color:#0f172a">
                   <div class="flex items-center justify-between gap-3">
                     <div>
                       ${escapeHtml(g.parent.itemName)}
@@ -1051,7 +1050,6 @@
                 <td class="py-2.5 px-3 font-mono-code text-xs font-bold text-blue-700 print:text-black">${escapeHtml(item.bopCode)}</td>
                 <td class="py-2.5 px-3 font-semibold text-slate-900 print:text-black">${escapeHtml(item.bopName)}</td>
                 <td class="py-2.5 px-3 text-xs">${gradeDisplay}</td>
-                <td class="py-2.5 px-3 text-slate-700 text-xs print:text-black">${escapeHtml(item.mSection)}</td>
                 <td class="py-2.5 px-3 text-center font-bold text-slate-900 print:text-black">${escapeHtml(String(qtyFormatted))}</td>
                 <td class="py-2.5 px-3 text-center text-xs font-medium text-slate-600 print:text-black">${escapeHtml(item.unit)}</td>
                 <td class="py-2.5 px-3 text-xs">${sourceBadge}</td>
@@ -1064,7 +1062,7 @@
             sig.className = 'sig-row';
             sig.dataset.asm = gi;
             sig.innerHTML = `
-              <td colspan="8">
+              <td colspan="7">
                 <div style="display:grid;grid-template-columns:repeat(3,1fr);">
                   <div style="padding:8px 10px;border-right:1px solid #334155;">
                     <div style="height:42px;"></div>
@@ -1443,6 +1441,307 @@
           updateDatabaseUI(saved.meta);
         }
       }
+
+      // =====================================================================
+      // BOM EDITOR ADD-ON
+      // PASTE THIS WHOLE BLOCK INSIDE YOUR SCRIPT, on the line just ABOVE:
+      //      initFromIndexedDB();
+      // (it must stay inside the (function () { ... })(); wrapper)
+      // =====================================================================
+      (function setupBomEditor() {
+        const TYPE_OPTIONS = ['BOP', 'SUB ASSEMBLY'];
+        const SUB_RE = /SUB.?ASSEMBLY/;
+        let working = new Map();   // key -> editable copy of a parent node
+        let rootKey = null;        // assembly the editor was opened from
+        let activeKey = null;      // node currently shown in the editor
+
+        const $ = (id) => document.getElementById(id);
+        const cloneNode = (n) => ({ ...n, children: n.children.map(c => ({ ...c })) });
+        const inputCls = 'w-full px-2 py-1 border border-slate-300 rounded-md text-xs focus:border-blue-500 focus:ring-2 focus:ring-blue-500/20 outline-none bg-white';
+
+        // ---------- toolbar buttons ----------
+        const editBtn = document.createElement('button');
+        editBtn.type = 'button';
+        editBtn.className = 'bg-amber-500 hover:bg-amber-400 text-slate-900 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-bold shadow-md transition flex items-center gap-2';
+        editBtn.textContent = '✎ Edit BOM';
+
+        const dlBtn = document.createElement('button');
+        dlBtn.type = 'button';
+        dlBtn.className = 'bg-slate-800 hover:bg-slate-700 text-slate-100 border border-slate-600 px-3.5 py-2.5 rounded-xl text-xs sm:text-sm font-semibold transition flex items-center gap-2';
+        dlBtn.textContent = '⬇ Download Edited Excel';
+
+        copyTableBtn.parentElement.insertBefore(dlBtn, copyTableBtn);
+        copyTableBtn.parentElement.insertBefore(editBtn, dlBtn);
+
+        // ---------- modal ----------
+        const modal = document.createElement('div');
+        modal.className = 'no-print hidden fixed inset-0 z-50 bg-slate-900/60 flex items-start justify-center p-3 sm:p-6 overflow-y-auto';
+        modal.innerHTML = `
+          <div class="bg-white rounded-2xl shadow-2xl w-full max-w-6xl border border-slate-200 my-auto">
+            <div class="px-5 py-3.5 border-b border-slate-200 bg-slate-50 rounded-t-2xl flex items-center justify-between">
+              <h2 class="font-bold text-slate-800">Edit BOM</h2>
+              <button id="bomEditClose" type="button" class="text-slate-500 hover:text-slate-900 text-lg leading-none">✕</button>
+            </div>
+            <div class="p-5 space-y-4">
+              <div class="grid grid-cols-1 sm:grid-cols-4 gap-3 text-xs">
+                <label class="sm:col-span-2 font-semibold text-slate-600">Editing
+                  <select id="bomEditNode" class="${inputCls} mt-1"></select>
+                </label>
+                <label class="font-semibold text-slate-600">Item Name
+                  <input id="bomEditName" type="text" class="${inputCls} mt-1" />
+                </label>
+                <div class="grid grid-cols-2 gap-3">
+                  <label class="font-semibold text-slate-600">Internal Code
+                    <input id="bomEditInternal" type="text" class="${inputCls} mt-1" />
+                  </label>
+                  <label class="font-semibold text-slate-600">Units
+                    <input id="bomEditUnits" type="text" class="${inputCls} mt-1" />
+                  </label>
+                </div>
+              </div>
+              <div class="overflow-x-auto border border-slate-200 rounded-xl">
+                <table class="w-full text-left text-xs">
+                  <thead class="bg-slate-100 text-slate-600 uppercase tracking-wider">
+                    <tr>
+                      <th class="p-2 w-10 text-center">#</th>
+                      <th class="p-2 w-28">Code</th>
+                      <th class="p-2 min-w-[220px]">Name</th>
+                      <th class="p-2 w-32">Type</th>
+                      <th class="p-2 w-28">Grade</th>
+                      <th class="p-2 w-28">Section</th>
+                      <th class="p-2 w-20">Qty</th>
+                      <th class="p-2 w-20">Unit</th>
+                      <th class="p-2 w-24"></th>
+                      <th class="p-2 w-10"></th>
+                    </tr>
+                  </thead>
+                  <tbody id="bomEditBody" class="divide-y divide-slate-100"></tbody>
+                </table>
+              </div>
+              <button id="bomEditAdd" type="button" class="text-xs font-semibold text-blue-700 bg-blue-50 hover:bg-blue-100 border border-blue-200 px-3 py-1.5 rounded-lg transition">+ Add line</button>
+              <p class="text-xs text-slate-500">Lines with type <strong>SUB ASSEMBLY</strong> pull in that sub-assembly's own BOP items. Use "Edit ▸" on a line to edit that sub-assembly. Blank lines are dropped on save.</p>
+            </div>
+            <div class="px-5 py-3.5 border-t border-slate-200 bg-slate-50 rounded-b-2xl flex justify-end gap-2.5">
+              <button id="bomEditCancel" type="button" class="px-4 py-2 rounded-xl text-sm font-semibold bg-white border border-slate-300 hover:bg-slate-100 transition">Cancel</button>
+              <button id="bomEditSave" type="button" class="px-5 py-2 rounded-xl text-sm font-bold bg-emerald-600 hover:bg-emerald-500 text-white shadow-sm transition">Save Changes</button>
+            </div>
+          </div>`;
+        document.body.appendChild(modal);
+
+        // ---------- helpers ----------
+        function getNode(key) {
+          if (!working.has(key) && parentMap.has(key)) working.set(key, cloneNode(parentMap.get(key)));
+          return working.get(key);
+        }
+
+        // root + every sub-assembly reachable from it (using the working copies)
+        function reachableKeys() {
+          const keys = [rootKey];
+          const seen = new Set(keys);
+          for (let i = 0; i < keys.length; i++) {
+            const node = getNode(keys[i]);
+            if (!node) continue;
+            node.children.forEach(c => {
+              const k = c.productKey;
+              if (SUB_RE.test((c.productType || '').toUpperCase()) && k && parentMap.has(k) && !seen.has(k)) {
+                seen.add(k);
+                keys.push(k);
+              }
+            });
+          }
+          return keys;
+        }
+
+        function subInfoHtml(c) {
+          if (!SUB_RE.test((c.productType || '').toUpperCase())) return '';
+          return parentMap.has(c.productKey)
+            ? `<button type="button" data-open="${escapeHtml(c.productKey)}" class="text-blue-700 font-semibold hover:underline">Edit ▸</button>`
+            : '<span class="text-rose-600 font-medium">not in DB</span>';
+        }
+
+        function rowHtml(c, i) {
+          const t = (c.productType || '').toUpperCase();
+          const opts = (!t || TYPE_OPTIONS.includes(t)) ? TYPE_OPTIONS : [...TYPE_OPTIONS, t];
+          const show = (v) => (v === '—' || v === '-' ? '' : v);
+          return `
+            <tr data-i="${i}">
+              <td class="p-2 text-center text-slate-500">${i + 1}</td>
+              <td class="p-2"><input data-f="productCode" value="${escapeHtml(show(c.productCode))}" class="${inputCls} font-mono-code" /></td>
+              <td class="p-2"><input data-f="pName" value="${escapeHtml(c.pName)}" class="${inputCls}" /></td>
+              <td class="p-2"><select data-f="productType" class="${inputCls}">${opts.map(o => `<option${o === (t || 'BOP') ? ' selected' : ''}>${escapeHtml(o)}</option>`).join('')}</select></td>
+              <td class="p-2"><input data-f="mGrade" value="${escapeHtml(show(c.mGrade))}" class="${inputCls}" /></td>
+              <td class="p-2"><input data-f="mSection" value="${escapeHtml(show(c.mSection))}" class="${inputCls}" /></td>
+              <td class="p-2"><input data-f="bomQty" type="number" step="any" min="0" value="${escapeHtml(String(c.bomQty))}" class="${inputCls}" /></td>
+              <td class="p-2"><input data-f="pUnits" value="${escapeHtml(c.pUnits)}" class="${inputCls}" /></td>
+              <td class="p-2" data-subinfo>${subInfoHtml(c)}</td>
+              <td class="p-2 text-center"><button type="button" data-del="${i}" title="Delete line" class="text-rose-600 hover:text-rose-800 font-bold">🗑</button></td>
+            </tr>`;
+        }
+
+        function renderEditor() {
+          const node = getNode(activeKey);
+          $('bomEditNode').innerHTML = reachableKeys().map(k => {
+            const n = getNode(k);
+            return `<option value="${escapeHtml(k)}"${k === activeKey ? ' selected' : ''}>${k === rootKey ? '★ ' : '↳ '}${escapeHtml(n.itemName)} [${escapeHtml(n.itemCode)}]</option>`;
+          }).join('');
+          $('bomEditName').value = node.itemName;
+          $('bomEditInternal').value = node.internalCode === '-' ? '' : node.internalCode;
+          $('bomEditUnits').value = node.units;
+          $('bomEditBody').innerHTML = node.children.length
+            ? node.children.map(rowHtml).join('')
+            : '<tr><td colspan="10" class="p-6 text-center text-slate-500">No lines yet. Click "+ Add line".</td></tr>';
+        }
+
+        function closeEditor() {
+          modal.classList.add('hidden');
+          document.body.style.overflow = '';
+          working = new Map();
+        }
+
+        // ---------- open / close ----------
+        editBtn.addEventListener('click', () => {
+          if (allMode || !selectedParent) {
+            showToast('Select a single assembly first (not "All Assemblies") to edit its BOM.', 'error');
+            return;
+          }
+          working = new Map();
+          rootKey = selectedParent.key;
+          activeKey = rootKey;
+          renderEditor();
+          modal.classList.remove('hidden');
+          document.body.style.overflow = 'hidden';
+        });
+        $('bomEditClose').addEventListener('click', closeEditor);
+        $('bomEditCancel').addEventListener('click', closeEditor);
+        document.addEventListener('keydown', (e) => {
+          if (e.key === 'Escape' && !modal.classList.contains('hidden')) closeEditor();
+        });
+
+        // ---------- editing ----------
+        $('bomEditNode').addEventListener('change', (e) => { activeKey = e.target.value; renderEditor(); });
+        $('bomEditName').addEventListener('input', (e) => { getNode(activeKey).itemName = e.target.value; });
+        $('bomEditInternal').addEventListener('input', (e) => { getNode(activeKey).internalCode = e.target.value; });
+        $('bomEditUnits').addEventListener('input', (e) => { getNode(activeKey).units = e.target.value; });
+
+        const bodyEl = $('bomEditBody');
+        function applyField(el) {
+          const tr = el.closest('tr[data-i]');
+          if (!tr || !el.dataset.f) return null;
+          const c = getNode(activeKey).children[Number(tr.dataset.i)];
+          c[el.dataset.f] = el.value;
+          if (el.dataset.f === 'productCode') c.productKey = normalizeCode(el.value);
+          return { tr, c };
+        }
+        bodyEl.addEventListener('input', (e) => applyField(e.target));
+        bodyEl.addEventListener('change', (e) => {
+          const r = applyField(e.target);
+          if (r && (e.target.dataset.f === 'productCode' || e.target.dataset.f === 'productType')) {
+            r.tr.querySelector('[data-subinfo]').innerHTML = subInfoHtml(r.c);
+          }
+        });
+        bodyEl.addEventListener('click', (e) => {
+          const del = e.target.closest('[data-del]');
+          if (del) {
+            getNode(activeKey).children.splice(Number(del.dataset.del), 1);
+            renderEditor();
+            return;
+          }
+          const open = e.target.closest('[data-open]');
+          if (open) { activeKey = open.dataset.open; renderEditor(); }
+        });
+
+        $('bomEditAdd').addEventListener('click', () => {
+          getNode(activeKey).children.push({
+            productCode: '', productKey: '', pName: '', pUnits: 'NOS',
+            productType: 'BOP', mGrade: '', mSection: '', bomQty: 1
+          });
+          renderEditor();
+          const inputs = bodyEl.querySelectorAll('tr[data-i]:last-child input[data-f="productCode"]');
+          if (inputs.length) { inputs[0].focus(); inputs[0].scrollIntoView({ block: 'center' }); }
+        });
+
+        // ---------- save ----------
+        $('bomEditSave').addEventListener('click', async () => {
+          // drop blank lines, then validate quantities
+          for (const node of working.values()) {
+            node.children = node.children.filter(c => cleanCellText(c.productCode) || cleanCellText(c.pName));
+          }
+          for (const [key, node] of working) {
+            const badIdx = node.children.findIndex(c => { const q = parseFloat(c.bomQty); return isNaN(q) || q < 0; });
+            if (badIdx !== -1) {
+              activeKey = key;
+              renderEditor();
+              showToast(`"${node.itemName}" line ${badIdx + 1}: Qty must be a number (0 or more).`, 'error');
+              return;
+            }
+          }
+
+          // apply to the live database (mutate in place so selectedParent stays valid)
+          working.forEach((node, key) => {
+            const target = parentMap.get(key);
+            if (!target) return;
+            target.itemName = cleanCellText(node.itemName) || target.itemCode;
+            target.internalCode = cleanCellText(node.internalCode) || '-';
+            target.units = cleanCellText(node.units) || 'NOS';
+            target.children = node.children.map(c => ({
+              productCode: cleanCellText(c.productCode) || '-',
+              productKey: normalizeCode(c.productCode),
+              pName: cleanCellText(c.pName) || cleanCellText(c.productCode),
+              pUnits: cleanCellText(c.pUnits) || 'NOS',
+              productType: cleanCellText(c.productType).toUpperCase() || 'BOP',
+              mGrade: cleanCellText(c.mGrade) || '—',
+              mSection: cleanCellText(c.mSection) || '—',
+              bomQty: parseFloat(c.bomQty)
+            }));
+          });
+
+          let bopLines = 0;
+          parentMap.forEach(p => p.children.forEach(c => { if (c.productType === 'BOP') bopLines++; }));
+          rawBopLineCount = bopLines;
+          rebuildSearchIndex();
+
+          const prev = await loadFromIndexedDB();
+          const meta = Object.assign(
+            {
+              fileName: 'Edited BOM',
+              uploadedAt: new Date().toLocaleString(),
+              assemblyCount: searchableParents.filter(p => p.itemType === 'ASSEMBLY').length || searchableParents.length,
+              totalParents: searchableParents.length
+            },
+            prev && prev.meta,
+            { bopLines, editedAt: new Date().toLocaleString() }
+          );
+          if (!/\(edited\)$/.test(meta.fileName)) meta.fileName += ' (edited)';
+
+          await saveToIndexedDB({ parents: Array.from(parentMap.entries()), meta });
+          updateDatabaseUI(meta);
+
+          if (selectedParent) {
+            assemblySearchInput.value = `${selectedParent.itemName} (Code: ${selectedParent.itemCode})`;
+          }
+          renderBopTable();
+          closeEditor();
+          showToast('BOM updated and saved in this browser.', 'success');
+        });
+
+        // ---------- download edited database as Excel ----------
+        dlBtn.addEventListener('click', () => {
+          if (!parentMap.size) { showToast('No BOM database loaded.', 'error'); return; }
+          if (typeof XLSX === 'undefined') { showToast('Excel library (SheetJS) is not loaded.', 'error'); return; }
+          const blank = (v) => (v === '—' || v === '-' ? '' : v);
+          const rows = [['InternalCode', 'Item code', 'Item Name', 'item group', 'Units', 'Type', 'Item Type',
+                         'Product Code', 'PName', 'Punits', 'Product Type', 'M Grade', 'M Section', 'BomQty']];
+          parentMap.forEach(p => {
+            p.children.forEach(c => rows.push([
+              blank(p.internalCode), p.itemCode, p.itemName, '', p.units, '', p.itemType,
+              blank(c.productCode), c.pName, c.pUnits, c.productType, blank(c.mGrade), blank(c.mSection), c.bomQty
+            ]));
+          });
+          const wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(rows), 'BOM');
+          XLSX.writeFile(wb, 'BOM_EDITED.xlsx');
+        });
+      })();
 
       initFromIndexedDB();
     })();
